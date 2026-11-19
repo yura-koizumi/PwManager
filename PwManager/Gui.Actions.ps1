@@ -94,24 +94,11 @@ function Invoke-PwUiChangePassword($ui) {
 }
 
 function Lock-PwUi($ui) {
+    # 画面を閉じて、このプロセスを終える（保管庫の鍵やコピーしたパスワードをメモリーに残さないため）。
+    # 起動し直しとクリップボードの消去は Show-PwManager の最後で行う
     if ($ui.Locking) { return }
     $ui.Locking = $true
-    try {
-        Set-PwUiListData $ui @()
-        $ui.Count.Text = ''
-        foreach ($p in $ui.Panels) { $p.Enabled = $false }
-        Set-PwUiStatus $ui 'ロック中'
-        if (Show-PwUnlockDialog $ui 'ロックしました。続けるにはマスターパスワードを入力してください。') {
-            foreach ($p in $ui.Panels) { $p.Enabled = $true }
-            Update-PwUiData $ui
-            Set-PwUiStatus $ui 'ロックを解除しました。'
-        } else {
-            $ui.Form.Close()
-        }
-    } finally {
-        $ui.Locking = $false
-        $ui.LastActivity = Get-Date
-    }
+    $ui.Form.Close()
 }
 
 function Invoke-PwUiAutoLock($ui) {

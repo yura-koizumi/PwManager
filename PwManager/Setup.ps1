@@ -41,14 +41,12 @@ function Initialize-PwManager {
 function Install-PwShortcut {
     <# デスクトップとスタートメニューに起動用ショートカットを作る #>
     [CmdletBinding()] param()
-    $launch = Join-Path $script:ModuleRoot 'Launch.ps1'
-    $arguments = "powershell.exe -NoProfile -NonInteractive -STA -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$launch`""
+    $cmd = Get-PwLaunchCommand
     $shell = New-Object -ComObject WScript.Shell
     foreach ($dir in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs')) {
         $lnk = $shell.CreateShortcut((Join-Path $dir 'PwManager.lnk'))
-        # conhost 経由にするのは、Windows ターミナルが既定でもウィンドウを隠せるようにするため
-        $lnk.TargetPath       = Join-Path $env:SystemRoot 'System32\conhost.exe'
-        $lnk.Arguments        = $arguments
+        $lnk.TargetPath       = $cmd.File
+        $lnk.Arguments        = $cmd.Arguments
         $lnk.WorkingDirectory = $script:ModuleRoot
         $lnk.IconLocation     = (Join-Path $env:SystemRoot 'System32\shell32.dll') + ',47'
         $lnk.Description      = 'PwManager パスワード管理'
@@ -57,3 +55,18 @@ function Install-PwShortcut {
     }
 }
 
+function Get-PwLaunchCommand([string]$Extra) {
+    # ショートカットと同じ起動方法（コンソールを出さずに Launch.ps1 を実行する）
+    # conhost 経由にするのは、Windows ターミナルが既定でもウィンドウを隠せるようにするため
+    $launch = Join-Path $script:ModuleRoot 'Launch.ps1'
+    @{
+        File      = Join-Path $env:SystemRoot 'System32\conhost.exe'
+        Arguments = ("powershell.exe -NoProfile -NonInteractive -STA -WindowStyle Hidden -ExecutionPolicy RemoteSigned -File `"$launch`" $Extra").TrimEnd()
+    }
+}
+
+function Start-PwLauncher([switch]$Locked) {
+    # ロックしたあと、新しいプロセスで画面を開き直す
+    $cmd = Get-PwLaunchCommand $(if ($Locked) { '-Locked' })
+    Start-Process -FilePath $cmd.File -ArgumentList $cmd.Arguments -WindowStyle Hidden
+}

@@ -18,7 +18,6 @@ function New-PwUiState($Cfg) {
         Status        = $null                    # 状態表示（左下）
         ClipLabel     = $null                    # クリップボード消去までの秒数
         Count         = $null                    # 件数表示
-        Panels        = @()                      # ロック中に無効にする部品
         # 動作の状態
         Suspend       = $false                   # $true の間は一覧を更新しない（カテゴリ欄の作り直し中など）
         SelectName    = $null                    # 次の一覧更新で選ぶ行（シークレット名）
@@ -27,7 +26,7 @@ function New-PwUiState($Cfg) {
         ClipExpire    = $null                    # クリップボードを消去する時刻
         LastActivity  = Get-Date                 # 最後に操作した時刻（自動ロックの判定用）
         UnlockedAt    = $null                    # 最後にロックを解除した時刻（再入力の判定用）
-        Locking       = $false                   # ロック処理中
+        Locking       = $false                   # ロック処理中（画面を閉じている途中）
     }
 }
 
@@ -35,8 +34,15 @@ function Show-PwManager {
     <#
     .SYNOPSIS
       パスワード管理画面を開く（別名: pwm）
+    .DESCRIPTION
+      ロック（Ctrl+L・自動ロック）すると、メモリーに鍵やパスワードを残さないよう、画面を閉じてこのプロセスを終える。
+      -RelaunchOnLock（ショートカットから起動したとき）なら、新しいプロセスでロック解除の画面を出し直す。
     #>
-    [CmdletBinding()] param()
+    [CmdletBinding()]
+    param(
+        [switch]$RelaunchOnLock,   # ロックしたら、新しいプロセスで起動し直す
+        [switch]$Locked            # ロックから起動し直したところ（ロック解除の画面の文言を変える）
+    )
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     if ([System.Threading.Thread]::CurrentThread.GetApartmentState() -ne [System.Threading.ApartmentState]::STA) {
         throw '画面は STA モードで実行してください（powershell.exe -STA）。'
@@ -55,7 +61,8 @@ function Show-PwManager {
         $script:PinnedConfig = $cfg
         $ui = New-PwUiState $cfg
 
-        if (-not (Show-PwUnlockDialog $ui)) { return }
+        $prompt = if ($Locked) { 'ロックしました。続けるにはマスターパスワードを入力してください。' } else { 'マスターパスワードを入力してください。' }
+        if (-not (Show-PwUnlockDialog $ui $prompt)) { return }
 
         # ---- 画面の組み立て ----
         $form = New-PwControl Form @{
@@ -149,7 +156,6 @@ function Show-PwManager {
 
         # Dock は後から追加したものほど外側になる
         $form.Controls.AddRange([System.Windows.Forms.Control[]]@($grid, $top, $statusStrip))
-        $ui.Panels = @($top, $grid)
         Register-PwActivity $ui $form
 
         # ---- イベント ----
@@ -232,6 +238,11 @@ function Show-PwManager {
         if ($form) { $form.Dispose() }
         $mutex.ReleaseMutex()
         $mutex.Dispose()
+    }
+    if ($ui -and $ui.Locking) {
+        # ロックで閉じた。このプロセスはここで終わる（呼び出し元が PowerShell を終了する）
+        if ($RelaunchOnLock) { Start-PwLauncher -Locked }
+        else { Write-Host 'ロックしました。開き直すには pwm を実行してください。' }
     }
 }
 
