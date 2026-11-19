@@ -243,9 +243,10 @@ function Update-PwUiData($ui) {
 }
 
 function Set-PwUiClipboard($ui, [string]$Text, [bool]$Sensitive, [string]$What) {
-    Set-PwClipboard -Text $Text -Sensitive:$Sensitive
+    $seq = Set-PwClipboard -Text $Text -Sensitive:$Sensitive
     $sec = [int]$ui.Cfg.ClipboardClearSeconds
     if ($Sensitive -and $sec -gt 0) {
+        $ui.ClipSeq  = $seq
         $ui.ClipHash = Get-PwTextHash $Text
         $ui.ClipExpire = (Get-Date).AddSeconds($sec)
         Set-PwUiStatus $ui "$What をコピーしました（$sec 秒後に消去）"
@@ -387,7 +388,7 @@ function Show-PwManager {
         $ui = @{
             Cfg = $cfg; Entries = @(); Form = $null; Suspend = $false; SelectName = $null
             Font = New-Object System.Drawing.Font('Yu Gothic UI', 10)
-            ClipHash = $null; ClipExpire = $null
+            ClipSeq = $null; ClipHash = $null; ClipExpire = $null
             LastActivity = Get-Date; UnlockedAt = $null; Locking = $false
             CategoryField = @($cfg.Fields | Where-Object { $_.Type -eq 'Category' }) | Select-Object -First 1
         }
@@ -545,8 +546,8 @@ function Show-PwManager {
             if ($ui.ClipExpire) {
                 $left = [int][Math]::Ceiling(($ui.ClipExpire - (Get-Date)).TotalSeconds)
                 if ($left -le 0) {
-                    if (Clear-PwClipboardIfMatch $ui.ClipHash) { Set-PwUiStatus $ui 'クリップボードを消去しました。' }
-                    $ui.ClipHash = $null; $ui.ClipExpire = $null; $ui.ClipLabel.Text = ''
+                    if (Clear-PwClipboardIfMatch $ui.ClipSeq $ui.ClipHash) { Set-PwUiStatus $ui 'クリップボードを消去しました。' }
+                    $ui.ClipSeq = $null; $ui.ClipHash = $null; $ui.ClipExpire = $null; $ui.ClipLabel.Text = ''
                 } else {
                     $ui.ClipLabel.Text = "クリップボード消去まで $left 秒"
                 }
@@ -571,7 +572,7 @@ function Show-PwManager {
         [void]$form.ShowDialog()
     } finally {
         $script:PinnedConfig = $null
-        if ($ui -and $ui.ClipHash) { [void](Clear-PwClipboardIfMatch $ui.ClipHash) }
+        if ($ui -and $ui.ClipHash) { [void](Clear-PwClipboardIfMatch $ui.ClipSeq $ui.ClipHash) }
         if ($form) { $form.Dispose() }
         $mutex.ReleaseMutex()
         $mutex.Dispose()
