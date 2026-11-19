@@ -5,13 +5,11 @@
   "AutoLockMinutes": 10,
   "UnlockTimeoutSeconds": 3600,
   "Fields": [
-    { "Name": "Id",       "Label": "ID",       "Copy": true },
-    { "Name": "Email",    "Label": "メール",   "Copy": true },
-    { "Name": "Url",      "Label": "URL",      "Copy": true, "Open": true },
-    { "Name": "Category", "Label": "カテゴリ", "Type": "Category" },
-    { "Name": "Note",     "Label": "備考",     "Multiline": true }
+    { "Name": "Id",   "Label": "ID",   "Copy": true },
+    { "Name": "Url",  "Label": "URL",  "Copy": true, "Open": true },
+    { "Name": "Note", "Label": "備考", "Multiline": true }
   ],
-  "Categories": [ "仕事", "社内システム", "取引先", "共通", "その他" ],
+  "Categories": [],
   "PasswordGenerator": {
     "Length": 20,
     "Symbols": true,

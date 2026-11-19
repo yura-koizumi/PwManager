@@ -19,15 +19,27 @@ function Import-PwCsv {
       Excel 等から書き出した CSV を取り込む。
       必須列: Title(またはタイトル/サービス) と Password(またはパスワード)。
       その他の列は、設定 Fields の Name または Label と同じ見出しなら取り込む。
+      どれにも当てはまらない列があると、データを取りこぼさないよう止まる（-IgnoreUnknownColumns でその列を無視して続ける）。
       Excel の「CSV (コンマ区切り)」は -Encoding Default、「CSV UTF-8」は既定の UTF8。
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
-        [ValidateSet('UTF8', 'Default')][string]$Encoding = 'UTF8'
+        [ValidateSet('UTF8', 'Default')][string]$Encoding = 'UTF8',
+        [switch]$IgnoreUnknownColumns
     )
     $cfg = Get-PwConfig
     $rows = @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
+    # 日時の列は Export-PwCsv が書き出すが、取り込み時に付け直すので読まない（知っている列として扱う）
+    $known = @('Title', 'タイトル', 'サービス', 'Service', 'サービス名', 'Password', 'パスワード', 'PW',
+               'Updated', 'Created', '更新日時', '作成日時') +
+             @(foreach ($f in @($cfg.Fields)) { $f.Name; $f.Label })
+    $unknown = @(if ($rows.Count -gt 0) { $rows[0].PSObject.Properties.Name | Where-Object { $known -notcontains $_ } })
+    if ($unknown.Count -gt 0 -and -not $IgnoreUnknownColumns) {
+        throw ("取り込み先の項目が無い列があります: {0}`n" +
+               "設定の Fields に項目を追加してから取り込むか（README「項目（Fields）を追加・変更する」）、" +
+               "その列を取り込まなくてよければ -IgnoreUnknownColumns を付けて実行してください。") -f ($unknown -join ', ')
+    }
     $pick = {
         param($Row, [string[]]$Keys)
         foreach ($k in $Keys) { $p = $Row.PSObject.Properties[$k]; if ($p -and $p.Value) { return [string]$p.Value } }

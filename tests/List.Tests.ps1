@@ -1,6 +1,12 @@
 ﻿. (Join-Path $PSScriptRoot 'TestHelper.ps1')
 
 # 一覧のデータ（List.ps1）を、画面を開かずに確かめる
+# カテゴリでの絞り込みも確かめるため、カテゴリ項目のある設定にする（既定の設定には無い）
+@'
+{ "Fields": [
+    { "Name": "Id", "Label": "ID" }, { "Name": "Email", "Label": "メール" }, { "Name": "Url", "Label": "URL" },
+    { "Name": "Category", "Label": "カテゴリ", "Type": "Category" }, { "Name": "Note", "Label": "備考", "Multiline": true } ] }
+'@ | Set-Content -LiteralPath (Join-Path $env:APPDATA 'PwManager\config.json') -Encoding UTF8
 $r = & $Pwm {
     function Info([string]$Name, [hashtable]$Meta) {
         # 実際の SecretInfo.Metadata と同じく、無いキーを引くと例外になる読み取り専用の辞書にする

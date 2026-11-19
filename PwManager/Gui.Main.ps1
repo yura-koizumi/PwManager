@@ -64,8 +64,9 @@ function Show-PwManager {
         }
         $ui.Form = $form
 
-        $top = New-PwControl FlowLayoutPanel @{ Dock = 'Top'; AutoSize = $true; Padding = (New-PwPadding 6 6 6 2) }
-        $search = New-PwControl TextBox @{ Width = 260 }
+        # 上の帯: 検索欄と、ボタンは「＋ 新規」「≡（メニュー）」の 2 つだけ。行ごとの操作は Enter・ダブルクリック・右クリックで行う
+        $top = New-PwControl FlowLayoutPanel @{ Dock = 'Top'; AutoSize = $true; WrapContents = $false; Padding = (New-PwPadding 6 6 6 4) }
+        $search = New-PwControl TextBox @{ Width = 360 }
         $ui.Search = $search
         $top.Controls.Add((New-PwControl Label @{ Text = '検索'; AutoSize = $true; Margin = (New-PwPadding 3 8 3 3) }))
         $top.Controls.Add($search)
@@ -75,49 +76,50 @@ function Show-PwManager {
             $top.Controls.Add((New-PwControl Label @{ Text = $ui.CategoryField.Label; AutoSize = $true; Margin = (New-PwPadding 12 8 3 3) }))
             $top.Controls.Add($catBox)
         }
-        $btnNew    = New-PwButton '新規 (Ctrl+N)'
-        $btnEdit   = New-PwButton '編集 (F2)'
-        $btnDel    = New-PwButton '削除 (Del)'
-        $btnReload = New-PwButton '再読込 (F5)'
-        $btnBackup = New-PwButton 'バックアップ'
-        $btnConfig = New-PwButton '設定'
-        $btnMaster = New-PwButton 'マスターパスワード変更'
-        $btnLock   = New-PwButton 'ロック (Ctrl+L)'
-        $btnNew.Margin = New-PwPadding 16 3 3 3
-        $top.Controls.AddRange([System.Windows.Forms.Control[]]@($btnNew, $btnEdit, $btnDel, $btnReload, $btnBackup, $btnConfig, $btnMaster, $btnLock))
+        $btnNew  = New-PwButton '＋ 新規'
+        $btnNew.Margin = New-PwPadding 12 3 3 3
+        $btnMenu = New-PwButton '≡'   # Tag にメニューを持たせる（テストから探せるように）
+        $btnMenu.Font = New-Object System.Drawing.Font($ui.Font.FontFamily, 12)
+        $top.Controls.AddRange([System.Windows.Forms.Control[]]@($btnNew, $btnMenu))
+        $tips = New-Object System.Windows.Forms.ToolTip
+        $tips.SetToolTip($btnNew, '新規登録 (Ctrl+N)')
+        $tips.SetToolTip($btnMenu, 'メニュー')
 
-        $copyBar = New-PwControl FlowLayoutPanel @{ Dock = 'Top'; AutoSize = $true; Padding = (New-PwPadding 6 0 6 4) }
-        $btnPw = New-PwButton 'パスワードをコピー (Enter)'
-        $btnPw.Font = New-Object System.Drawing.Font($ui.Font, [System.Drawing.FontStyle]::Bold)
-        $btnPw.Add_Click({ Invoke-PwUi $ui { Copy-PwUiPassword $ui } })
-        $copyBar.Controls.Add($btnPw)
+        # ≡ のメニュー: 毎日は使わない操作
+        $appMenu = New-Object System.Windows.Forms.ContextMenuStrip
+        $appMenu.Font = $ui.Font
+        $addItem = {
+            param($Menu, [string]$Text, [string]$Keys, [scriptblock]$Action)
+            $item = $Menu.Items.Add($Text)
+            if ($Keys) { $item.ShortcutKeyDisplayString = $Keys }
+            $item.Tag = $Action
+            $item.Add_Click({ param($s) Invoke-PwUi $ui $s.Tag })
+        }
+        & $addItem $appMenu '再読込' 'F5' { Update-PwUiData $ui; Set-PwUiStatus $ui '再読込しました。' }
+        & $addItem $appMenu 'バックアップ' '' { Invoke-PwUiBackup $ui }
+        & $addItem $appMenu 'マスターパスワードの変更...' '' { Invoke-PwUiChangePassword $ui }
+        & $addItem $appMenu '設定ファイルを開く...' '' { Invoke-PwUiConfig $ui }
+        [void]$appMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+        & $addItem $appMenu 'ロック' 'Ctrl+L' { Lock-PwUi $ui }
+        $btnMenu.Tag = $appMenu
 
+        # 右クリックのメニュー: 選んだ行への操作
         $menu = New-Object System.Windows.Forms.ContextMenuStrip
         $menu.Font = $ui.Font
-        $mi = $menu.Items.Add('パスワードをコピー')
-        $mi.Add_Click({ Invoke-PwUi $ui { Copy-PwUiPassword $ui } })
-
+        & $addItem $menu 'パスワードをコピー' 'Enter' { Copy-PwUiPassword $ui }
         foreach ($f in @($cfg.Fields)) {
-            if ($f.Copy) {
-                $b = New-PwButton "$($f.Label)をコピー"; $b.Tag = $f
-                $b.Add_Click({ param($s) Invoke-PwUi $ui { Copy-PwUiField $ui $s.Tag } })
-                $copyBar.Controls.Add($b)
-                $mi = $menu.Items.Add("$($f.Label)をコピー"); $mi.Tag = $f
-                $mi.Add_Click({ param($s) Invoke-PwUi $ui { Copy-PwUiField $ui $s.Tag } })
-            }
+            if (-not $f.Copy) { continue }
+            $item = $menu.Items.Add("$($f.Label)をコピー"); $item.Tag = $f
+            $item.Add_Click({ param($s) Invoke-PwUi $ui { Copy-PwUiField $ui $s.Tag } })
+        }
+        foreach ($f in @($cfg.Fields)) {
+            if (-not $f.Open) { continue }
+            $item = $menu.Items.Add("$($f.Label)を開く"); $item.Tag = $f
+            $item.Add_Click({ param($s) Invoke-PwUi $ui { Open-PwUiUrl $ui $s.Tag } })
         }
         [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-        foreach ($f in @($cfg.Fields)) {
-            if ($f.Open) {
-                $b = New-PwButton "$($f.Label)を開く"; $b.Tag = $f
-                $b.Add_Click({ param($s) Invoke-PwUi $ui { Open-PwUiUrl $ui $s.Tag } })
-                $copyBar.Controls.Add($b)
-                $mi = $menu.Items.Add("$($f.Label)を開く"); $mi.Tag = $f
-                $mi.Add_Click({ param($s) Invoke-PwUi $ui { Open-PwUiUrl $ui $s.Tag } })
-            }
-        }
-        $mi = $menu.Items.Add('編集...');  $mi.Add_Click({ Invoke-PwUi $ui { Edit-PwUiEntry $ui } })
-        $mi = $menu.Items.Add('削除...');  $mi.Add_Click({ Invoke-PwUi $ui { Remove-PwUiEntry $ui } })
+        & $addItem $menu '編集...' 'F2' { Edit-PwUiEntry $ui }
+        & $addItem $menu '削除...' 'Del' { Remove-PwUiEntry $ui }
 
         $grid = New-PwControl DataGridView @{
             Dock = 'Fill'; ReadOnly = $true; AllowUserToAddRows = $false; AllowUserToDeleteRows = $false
@@ -146,8 +148,8 @@ function Show-PwManager {
         $statusStrip.Items.AddRange([System.Windows.Forms.ToolStripItem[]]@($ui.Status, $ui.ClipLabel, $ui.Count))
 
         # Dock は後から追加したものほど外側になる
-        $form.Controls.AddRange([System.Windows.Forms.Control[]]@($grid, $copyBar, $top, $statusStrip))
-        $ui.Panels = @($top, $copyBar, $grid)
+        $form.Controls.AddRange([System.Windows.Forms.Control[]]@($grid, $top, $statusStrip))
+        $ui.Panels = @($top, $grid)
         Register-PwActivity $ui $form
 
         # ---- イベント ----
@@ -186,18 +188,7 @@ function Show-PwManager {
         $menu.Add_Opening({ param($s, $e) if (-not $grid.CurrentRow) { $e.Cancel = $true } })
 
         $btnNew.Add_Click({ Invoke-PwUi $ui { New-PwUiEntry $ui } })
-        $btnEdit.Add_Click({ Invoke-PwUi $ui { Edit-PwUiEntry $ui } })
-        $btnDel.Add_Click({ Invoke-PwUi $ui { Remove-PwUiEntry $ui } })
-        $btnReload.Add_Click({ Invoke-PwUi $ui { Update-PwUiData $ui; Set-PwUiStatus $ui '再読込しました。' } })
-        $btnBackup.Add_Click({ Invoke-PwUi $ui { Invoke-PwUiBackup $ui } })
-        $btnConfig.Add_Click({
-            Invoke-PwUi $ui {
-                Edit-PwConfig
-                Show-PwMessage "設定ファイルをメモ帳で開きました。`n保存したあと、PwManager を開き直すと反映されます。"
-            }
-        })
-        $btnMaster.Add_Click({ Invoke-PwUi $ui { Invoke-PwUiChangePassword $ui } })
-        $btnLock.Add_Click({ Invoke-PwUi $ui { Lock-PwUi $ui } })
+        $btnMenu.Add_Click({ $appMenu.Show($btnMenu, 0, $btnMenu.Height) })
 
         $form.Add_KeyDown({
             param($s, $e)

@@ -40,13 +40,28 @@ function Get-PwConfig {
 }
 
 function Edit-PwConfig {
-    <# 設定ファイルをメモ帳で開く（無ければ既定値のコピーを作る） #>
+    <# 設定ファイルを開く（無ければ既定値のコピーを作る）。メモ帳 → 既定のアプリ → エクスプローラーの順に試し、
+       使った方法（'Notepad' / 'App' / 'Explorer'）を返す。メモ帳が無い環境（Windows Sandbox など）でも止まらない。 #>
     [CmdletBinding()] param()
     Initialize-PwDataDir
     if (-not (Test-Path -LiteralPath $script:ConfigPath)) {
         Copy-Item -LiteralPath (Join-Path $script:ModuleRoot 'config.default.json') -Destination $script:ConfigPath
     }
-    Start-Process notepad.exe -ArgumentList "`"$($script:ConfigPath)`""
+    $path = $script:ConfigPath
+    try { Start-Process notepad.exe -ArgumentList "`"$path`"" -ErrorAction Stop; return 'Notepad' } catch { }
+    try { Start-Process -FilePath $path -ErrorAction Stop; return 'App' } catch { }
+    Start-Process explorer.exe -ArgumentList "/select,`"$path`""
+    'Explorer'
+}
+
+function Set-PwConfigValue([string]$Name, $Value) {
+    # 設定ファイル（config.json）の 1 項目だけを書き換える。画面の表示中なら、表示中の設定にも反映する
+    Initialize-PwDataDir
+    $user = if (Test-Path -LiteralPath $script:ConfigPath) { Read-PwJson $script:ConfigPath } else { $null }
+    if (-not $user) { $user = [pscustomobject]@{} }
+    $user | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
+    $user | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:ConfigPath -Encoding UTF8
+    if ($script:PinnedConfig) { $script:PinnedConfig[$Name] = $Value }
 }
 
 function Get-PwState {

@@ -33,6 +33,15 @@ $e = @(Get-PwEntry)[0]
 Check '取り込むと元の値に戻る' ($e.Title -eq '=1+1' -and $e.Id -eq '@user')
 Check 'パスワードも元のまま取り込む' ((& $Pwm { param($n) Get-PwPassword $n } $e.Name) -eq '-pw=1')
 
+$global:Store.Clear()
+$csv2 = Join-Path $TestRoot 'extra.csv'
+"Title,Password,Id,Email`r`nShop,pw1,u1,a@example.com" | Set-Content -LiteralPath $csv2 -Encoding UTF8
+$err = $null
+try { Import-PwCsv -Path $csv2 3>$null 6>$null } catch { $err = $_ }
+Check '取り込み先の無い列があれば、取り込まずに止まる' ($null -ne $err -and $err.Exception.Message -match 'Email' -and $global:Store.Count -eq 0)
+Import-PwCsv -Path $csv2 -IgnoreUnknownColumns 3>$null 6>$null
+Check '-IgnoreUnknownColumns なら、その列を無視して取り込む' (@(Get-PwEntry).Count -eq 1 -and @(Get-PwEntry)[0].Id -eq 'u1')
+
 Write-Host '監査ログ'
 & $Pwm { $script:AuditMaxBytes = 300 }
 1..10 | ForEach-Object { & $Pwm { Write-PwAudit 'TEST' ('x' * 50) } }

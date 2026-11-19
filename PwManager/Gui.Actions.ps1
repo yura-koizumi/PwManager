@@ -70,15 +70,32 @@ function Remove-PwUiEntry($ui) {
 
 function Invoke-PwUiBackup($ui, [switch]$Auto) {
     $dest = [Environment]::ExpandEnvironmentVariables([string]$ui.Cfg.BackupFolder)
+    $chosen = $false
     if (-not $dest) {
         if ($Auto) { return }
         $fb = New-Object System.Windows.Forms.FolderBrowserDialog
-        $fb.Description = "バックアップ先を選んでください。`n毎回選ばずに済ませるには、「設定」で BackupFolder を指定します。"
+        $fb.Description = "バックアップ先を選んでください（USB メモリーや社内の個人フォルダーなど）。`n選んだ場所は記憶し、次からはここに自動でバックアップします。"
         if ($fb.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
         $dest = $fb.SelectedPath
+        $chosen = $true
     }
     $zip = Backup-PwVault -Destination $dest
-    Set-PwUiStatus $ui ("{0}バックアップしました: {1}" -f $(if ($Auto) { '自動' } else { '' }), $zip.FullName)
+    if ($chosen) {
+        # 選んだ場所を設定に保存する（設定ファイルを開かなくて済むように）
+        Set-PwConfigValue 'BackupFolder' $dest
+        Set-PwUiStatus $ui "バックアップしました: $($zip.FullName)（次からはこのフォルダーに $($ui.Cfg.BackupIntervalDays) 日ごとに自動でバックアップします）"
+    } else {
+        Set-PwUiStatus $ui ("{0}バックアップしました: {1}" -f $(if ($Auto) { '自動' } else { '' }), $zip.FullName)
+    }
+}
+
+function Invoke-PwUiConfig($ui) {
+    $how = Edit-PwConfig
+    $msg = switch ($how) {
+        'Explorer' { "メモ帳が見つからないため、設定ファイルの場所をエクスプローラーで開きました。`nテキストエディターで config.json を編集してください。" }
+        default    { '設定ファイルを開きました。' }
+    }
+    Show-PwMessage "$msg`n保存したあと、PwManager を開き直すと反映されます。"
 }
 
 function Invoke-PwUiStartupBackup($ui) {
@@ -91,9 +108,9 @@ function Invoke-PwUiStartupBackup($ui) {
         try { Invoke-PwUiBackup $ui -Auto }
         catch { Set-PwUiStatus $ui "自動バックアップに失敗しました（保存先: $($ui.Cfg.BackupFolder)）: $($_.Exception.Message)" -Warn }
     } elseif ($last) {
-        Set-PwUiStatus $ui "前回のバックアップから $([int]((Get-Date) - $last).TotalDays) 日経っています。「バックアップ」を押してください。" -Warn
+        Set-PwUiStatus $ui "前回のバックアップから $([int]((Get-Date) - $last).TotalDays) 日経っています。≡ →「バックアップ」を押してください。" -Warn
     } else {
-        Set-PwUiStatus $ui 'まだバックアップがありません。「設定」で BackupFolder を指定すると自動でバックアップします。' -Warn
+        Set-PwUiStatus $ui 'まだバックアップがありません。≡ →「バックアップ」で保存先を選ぶと、次から自動でバックアップします。' -Warn
     }
 }
 
@@ -104,7 +121,7 @@ function Invoke-PwUiChangePassword($ui) {
     $lines = @('マスターパスワードを変更しました。次回からは新しいパスワードで開きます。', '')
     if ($r.SafetyCopy) { $lines += "変更前の保管庫: $($r.SafetyCopy)`n（変更前のパスワードで開けます。不要になったら削除して構いません）" }
     $lines += if ($r.Backup) { "新しいパスワードでバックアップしました: $($r.Backup)" }
-              else { 'バックアップ先（BackupFolder）が未設定のため、変更後のバックアップは取っていません。「バックアップ」を押してください。' }
+              else { 'バックアップ先が未設定のため、変更後のバックアップは取っていません。≡ →「バックアップ」を押してください。' }
     Show-PwMessage ($lines -join "`n")
     Set-PwUiStatus $ui 'マスターパスワードを変更しました。'
 }
