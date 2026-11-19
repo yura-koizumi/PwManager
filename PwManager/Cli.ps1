@@ -7,7 +7,7 @@
 
 function Resolve-PwEntry([string]$Query) {
     # 検索語からエントリを 1 件に決める。タイトルが完全に一致すればそれ、候補が複数なら選んでもらう
-    $hits = @(Get-PwEntry -Filter $Query)
+    $hits = @(Get-PwEntry -Filter $Query -All)
     $exact = @($hits | Where-Object { $_.Title -eq $Query })
     if ($exact.Count -eq 1) { $hits = $exact }
     if ($hits.Count -eq 0) { throw "「$Query」に一致するエントリはありません。" }
@@ -62,6 +62,17 @@ function New-PwEntry {
     <#
     .SYNOPSIS
       エントリを登録する。
+    .DESCRIPTION
+      パスワードは -Generate で生成するか、入力を求める（引数に平文で書くと、コマンドの履歴に残るため）。
+      PwManager の画面を閉じてから実行する。
+    .PARAMETER Title
+      タイトル（サービス名など）。
+    .PARAMETER Fields
+      項目の値。キーは項目の Name でも Label でもよい（例: @{ ID = 'taro'; URL = 'https://…' }）。
+    .PARAMETER Password
+      パスワード（SecureString）。省略すると入力を求める。
+    .PARAMETER Generate
+      パスワードを生成する（長さなどは設定の PasswordGenerator）。
     .EXAMPLE
       New-PwEntry Amazon -Fields @{ ID = 'taro'; URL = 'https://www.amazon.co.jp' } -Generate
       # パスワードを生成して登録（Copy-PwField Amazon でコピーできる）
@@ -89,7 +100,24 @@ function New-PwEntry {
 function Set-PwEntry {
     <#
     .SYNOPSIS
-      エントリを編集する。指定した項目だけを変える（指定しなかった項目とパスワードはそのまま）。
+      エントリを編集する（指定した項目だけを変える）。
+    .DESCRIPTION
+      指定しなかった項目とパスワードはそのまま。
+      PwManager の画面を閉じてから実行する。
+    .PARAMETER Query
+      対象の検索語（Get-PwEntry と同じ）。タイトルが完全に一致すればそれ、候補が複数なら選ぶ画面が出る。
+    .PARAMETER Name
+      対象の ID（pwm:…）。Get-PwEntry の結果をパイプで渡すと使われる。
+    .PARAMETER Title
+      新しいタイトル。
+    .PARAMETER Fields
+      変える項目の値。キーは項目の Name でも Label でもよい。空文字を渡すと、その項目を空にする。
+    .PARAMETER Password
+      新しいパスワード（SecureString）。
+    .PARAMETER Generate
+      パスワードを生成し直す。
+    .PARAMETER PromptPassword
+      新しいパスワードの入力を求める。
     .EXAMPLE
       Set-PwEntry Amazon -Fields @{ URL = 'https://www.amazon.com' }
     .EXAMPLE

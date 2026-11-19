@@ -22,6 +22,7 @@
         'Install-PwShortcut'
         'Set-PwMasterPassword'
         'New-PwRecoveryKey'
+        'Get-PwHelp'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()

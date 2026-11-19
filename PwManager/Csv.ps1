@@ -16,11 +16,23 @@ function Unprotect-PwCsvValue([string]$Value) {
 function Import-PwCsv {
     <#
     .SYNOPSIS
-      Excel 等から書き出した CSV を取り込む。
+      Excel などから書き出した CSV を取り込む。
+    .DESCRIPTION
       必須列: Title(またはタイトル/サービス) と Password(またはパスワード)。
       その他の列は、設定 Fields の Name または Label と同じ見出しなら取り込む。
       どれにも当てはまらない列があると、データを取りこぼさないよう止まる（-IgnoreUnknownColumns でその列を無視して続ける）。
       Excel の「CSV (コンマ区切り)」は -Encoding Default、「CSV UTF-8」は既定の UTF8。
+      PwManager の画面を閉じてから実行する。取り込んだら、CSV と元の Excel ファイルは削除すること。
+    .PARAMETER Path
+      CSV ファイル。
+    .PARAMETER Encoding
+      文字コード（UTF8 または Default）。
+    .PARAMETER IgnoreUnknownColumns
+      取り込み先の項目が無い列を無視して続ける。
+    .EXAMPLE
+      Import-PwCsv -Path C:\work\passwords.csv
+    .EXAMPLE
+      Import-PwCsv -Path C:\work\passwords.csv -Encoding Default -IgnoreUnknownColumns
     #>
     [CmdletBinding()]
     param(
@@ -64,7 +76,16 @@ function Import-PwCsv {
 function Export-PwCsv {
     <#
     .SYNOPSIS
-      一覧を CSV に書き出す（ほかのツールへの移行用）。-IncludePassword を付けるとパスワードを平文で含める。
+      一覧を CSV に書き出す（ほかのツールへの移行用）。
+    .DESCRIPTION
+      -IncludePassword を付けるとパスワードを平文で含める（確認あり）。使い終わったら CSV は削除すること。
+      Excel で数式として実行されないよう、= + - @ で始まる値には先頭に ' を付ける（Import-PwCsv で元に戻る）。
+    .PARAMETER Path
+      書き出す CSV ファイル。
+    .PARAMETER IncludePassword
+      パスワードを平文で含める。
+    .EXAMPLE
+      Export-PwCsv -Path out.csv -IncludePassword
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param(
@@ -73,7 +94,7 @@ function Export-PwCsv {
     )
     $cfg = Get-PwConfig
     if ($IncludePassword -and -not $PSCmdlet.ShouldProcess($Path, 'パスワードを平文で書き出す')) { return }
-    $rows = foreach ($e in @(Get-PwEntry)) {
+    $rows = foreach ($e in @(Get-PwEntry -All)) {
         $h = [ordered]@{ Title = Protect-PwCsvValue $e.Title }
         if ($IncludePassword) { $h['Password'] = Get-PwPassword $e.Name }
         foreach ($f in @($cfg.Fields)) { $h[$f.Name] = Protect-PwCsvValue $e.($f.Name) }

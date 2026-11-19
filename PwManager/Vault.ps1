@@ -133,14 +133,32 @@ function ConvertTo-PwEntry([string]$Name, $Meta, [string[]]$Keys) {
     [pscustomobject]$h
 }
 
-function Test-PwMatch($Entry, [string]$Query, $Cfg) {
-    # 空白区切りの全単語が、タイトルまたはいずれかの項目に含まれれば一致（大文字小文字は区別しない）
-    if (-not $Query) { return $true }
-    $texts = @($Entry.Title) + @(foreach ($f in @($Cfg.Fields)) { $Entry.($f.Name) })
+$script:EntryListDefault = 50   # Get-PwEntry が既定で表示する件数
+
+function ConvertTo-PwQuery([string]$Query, $Cfg) {
+    <# 検索語を、空白で区切った語の一覧 @{ Field = 項目名（$null ならすべての項目）; Text = 探す文字 } にする。
+       「項目:文字」の形（例 url:example、ID:taro）なら、その項目だけを探す。項目名は Name・Label のどちらでもよく、
+       タイトルは title / タイトル。項目名に当たらなければ（https://… など）、全体をふつうの語として扱う。 #>
     foreach ($word in ($Query -split '\s+' | Where-Object { $_ })) {
+        $field = $null; $text = $word
+        $i = $word.IndexOf(':')
+        if ($i -gt 0 -and $i -lt $word.Length - 1) {
+            $key = $word.Substring(0, $i)
+            if ($key -in 'title', 'タイトル') { $field = 'Title' }
+            else { $field = @($Cfg.Fields | Where-Object { $_.Name -eq $key -or $_.Label -eq $key } | ForEach-Object { $_.Name }) | Select-Object -First 1 }
+            if ($field) { $text = $word.Substring($i + 1) }
+        }
+        @{ Field = $field; Text = $text }
+    }
+}
+
+function Test-PwMatch($Entry, $Terms, $Cfg) {
+    # すべての語が含まれれば一致（大文字小文字は区別しない）。項目を指定しない語は、タイトルかいずれかの項目に含まれればよい
+    foreach ($term in @($Terms)) {
+        $texts = if ($term.Field) { @($Entry.($term.Field)) } else { @($Entry.Title) + @(foreach ($f in @($Cfg.Fields)) { $Entry.($f.Name) }) }
         $hit = $false
         foreach ($t in $texts) {
-            if ($t -and $t.IndexOf($word, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true; break }
+            if ($t -and ([string]$t).IndexOf($term.Text, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true; break }
         }
         if (-not $hit) { return $false }
     }
@@ -150,25 +168,57 @@ function Test-PwMatch($Entry, [string]$Query, $Cfg) {
 function Get-PwEntry {
     <#
     .SYNOPSIS
-      登録済みエントリの一覧（パスワードは含まない）。
+      エントリを検索・一覧表示する（パスワードは含まない）。
     .DESCRIPTION
-      画面には 1 件 1 行の表で、タイトル・1 行の項目 2 つ・更新日時だけを表示する（件数が多くても読めるように）。
-      ほかの項目も見るときは | Format-List * を付ける。
+      1 件 1 行の表で、タイトル・ID・URL・更新日時を表示する。全項目は | Format-List * で見る。
+      既定では先頭 50 件だけを表示し、残りがあれば件数を知らせる。全件は -All、件数は -First で指定する。
+      返すのはふつうのオブジェクトなので、Sort-Object・Where-Object・Out-GridView などにそのまま渡せる。
+    .PARAMETER Filter
+      検索語。空白で区切ると、すべての語を含むものだけ（大文字小文字は区別しない）。
+      「項目:文字」の形で、その項目だけを探す（例: url:example、id:taro、title:社内）。
+    .PARAMETER All
+      件数を区切らずに全件を返す。
+    .PARAMETER First
+      返す件数（既定 50）。
+    .PARAMETER Skip
+      先頭から飛ばす件数（ページ送り）。
+    .EXAMPLE
+      Get-PwEntry ポータル
+    .EXAMPLE
+      Get-PwEntry url:example.com id:taro
+    .EXAMPLE
+      Get-PwEntry -Skip 50 -First 50          # 51〜100 件目
+    .EXAMPLE
+      Get-PwEntry -All | Sort-Object Updated -Descending | Select-Object -First 10   # 最近更新した 10 件
+    .EXAMPLE
+      Get-PwEntry ポータル | Format-List *    # 全項目を表示
     #>
-    [CmdletBinding()]
-    param([Parameter(Position = 0)][string]$Filter)
+    [CmdletBinding(SupportsPaging)]
+    param([Parameter(Position = 0)][string]$Filter, [switch]$All)
     $cfg = Get-PwConfig
     $keys = Get-PwEntryKeys $cfg
     # 表示する列（PowerShell は 5 列以上だと縦に並べるため、4 列までにする）
     $shown = @('Title') + @($cfg.Fields | Where-Object { -not $_.Multiline } | Select-Object -First 2 | ForEach-Object { $_.Name }) + @('Updated')
     Update-TypeData -TypeName 'PwManager.Entry' -DefaultDisplayPropertySet $shown -Force
+    $terms = @(ConvertTo-PwQuery $Filter $cfg)
     $list = @(foreach ($i in Get-PwSecretInfo) {
         $e = ConvertTo-PwEntry $i.Name $i.Metadata $keys
+        if ($terms.Count -and -not (Test-PwMatch $e $terms $cfg)) { continue }
         $e.PSObject.TypeNames.Insert(0, 'PwManager.Entry')
         $e
-    })
-    if ($Filter) { $list = @($list | Where-Object { Test-PwMatch $_ $Filter $cfg }) }
-    $list | Sort-Object Title
+    }) | Sort-Object Title
+    $list = @($list)
+
+    $paging = $PSCmdlet.PagingParameters
+    if ($paging.IncludeTotalCount) { $paging.NewTotalCount([uint64]$list.Count, 1.0) }
+    $skip = [int][Math]::Min([uint64]$list.Count, $paging.Skip)
+    $take = if ($All) { $list.Count } elseif ($PSBoundParameters.ContainsKey('First')) { [int][Math]::Min([uint64][int]::MaxValue, $paging.First) } else { $script:EntryListDefault }
+    $end = [Math]::Min($list.Count, $skip + $take)
+    for ($k = $skip; $k -lt $end; $k++) { $list[$k] }
+    if (-not $All -and -not $PSBoundParameters.ContainsKey('First') -and $end -lt $list.Count) {
+        # 黙って減らすと「全件のつもり」で使ってしまうので、必ず知らせる
+        Write-Warning ("{0} 件のうち {1}〜{2} 件目を表示しました。全件は -All、続きは -Skip {2}、絞り込みは Get-PwEntry 検索語。" -f $list.Count, ($skip + 1), $end)
+    }
 }
 
 function Get-PwPassword([string]$Name) {
@@ -228,6 +278,12 @@ function Remove-PwEntry {
     <#
     .SYNOPSIS
       エントリを削除する（確認あり。戻すにはバックアップからの復元が必要）。
+    .DESCRIPTION
+      PwManager の画面を閉じてから実行する。
+    .PARAMETER Query
+      対象の検索語（Get-PwEntry と同じ）。タイトルが完全に一致すればそれ、候補が複数なら選ぶ画面が出る。
+    .PARAMETER Name
+      対象の ID（pwm:…）。Get-PwEntry の結果をパイプで渡すと使われる。
     .EXAMPLE
       Remove-PwEntry 旧システム
     .EXAMPLE
@@ -304,12 +360,23 @@ function Read-PwNewMasterPassword([securestring]$Current) {
 function Set-PwMasterPassword {
     <#
     .SYNOPSIS
-      マスターパスワードを変更する。保存済みのデータもバックアップも、そのまま使える。
+      マスターパスワードを変更する（忘れたときは -UseRecoveryKey）。
     .DESCRIPTION
+      保存済みのデータもバックアップも、そのまま使える。
       保管庫キーを新しいマスターパスワードで包み直すだけなので、すぐに終わり、一時ファイルも作らない。
       バックアップは回復キーで開くので、変更前のバックアップも影響を受けない。
       マスターパスワードを忘れたときは -UseRecoveryKey を付けると、今のパスワードの代わりに回復キーで変更できる。
       PwManager の画面が別に開いているときは実行できない（画面の ≡ →「マスターパスワードの変更」を使うこと）。
+    .PARAMETER Current
+      今のマスターパスワード（SecureString）。省略すると入力を求める。
+    .PARAMETER UseRecoveryKey
+      今のマスターパスワードの代わりに、回復キーで変更する（忘れたとき）。
+    .PARAMETER RecoveryKey
+      回復キー（SecureString）。省略すると入力を求める。
+    .PARAMETER New
+      新しいマスターパスワード（SecureString）。省略すると 2 回入力を求める。
+    .EXAMPLE
+      Set-PwMasterPassword                    # 今のパスワードと新しいパスワードを入力する
     .EXAMPLE
       Set-PwMasterPassword -UseRecoveryKey    # マスターパスワードを忘れたとき
     #>

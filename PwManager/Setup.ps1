@@ -2,7 +2,15 @@
 # （PwManager.psm1 から読み込まれる）
 
 function Initialize-PwManager {
-    <# 設定ファイル作成・保管庫登録・（初回のみ）マスターパスワード設定 #>
+    <#
+    .SYNOPSIS
+      初期設定をする（Install.bat から呼ばれる）。
+    .DESCRIPTION
+      設定ファイルの作成・保管庫の登録と、初回だけマスターパスワードの設定と回復キーの発行をする。
+      保管庫がすでにあれば、そのまま使う。
+    .EXAMPLE
+      Initialize-PwManager
+    #>
     [CmdletBinding()] param()
     Initialize-PwDataDir
     if (-not (Test-Path -LiteralPath $script:ConfigPath)) {
@@ -39,7 +47,12 @@ function Initialize-PwManager {
 }
 
 function Install-PwShortcut {
-    <# デスクトップとスタートメニューに起動用ショートカットを作る #>
+    <#
+    .SYNOPSIS
+      デスクトップとスタートメニューに起動用のショートカットを作る（Install.bat から呼ばれる）。
+    .EXAMPLE
+      Install-PwShortcut     # ショートカットを消してしまったとき
+    #>
     [CmdletBinding()] param()
     $cmd = Get-PwLaunchCommand
     $shell = New-Object -ComObject WScript.Shell

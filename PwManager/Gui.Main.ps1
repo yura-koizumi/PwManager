@@ -33,10 +33,16 @@ function New-PwUiState($Cfg) {
 function Show-PwManager {
     <#
     .SYNOPSIS
-      パスワード管理画面を開く（別名: pwm）
+      パスワード管理の画面を開く（Show-PwManager の別名が pwm）。
     .DESCRIPTION
       ロック（Ctrl+L・自動ロック）すると、メモリーに鍵やパスワードを残さないよう、画面を閉じてこのプロセスを終える。
       -RelaunchOnLock（ショートカットから起動したとき）なら、新しいプロセスでロック解除の画面を出し直す。
+    .PARAMETER RelaunchOnLock
+      ロックしたら、新しいプロセスで起動し直す（ショートカットから起動したとき用）。
+    .PARAMETER Locked
+      ロックから起動し直したところとして、ロック解除の画面に「ロックしました」と表示する。
+    .EXAMPLE
+      pwm
     #>
     [CmdletBinding()]
     param(

@@ -79,7 +79,13 @@ try {
 function Copy-PwField {
     <#
     .SYNOPSIS
-      コンソールからエントリの項目をコピーする。
+      エントリのパスワードや項目をクリップボードにコピーする。
+    .DESCRIPTION
+      パスワードは、設定の ClipboardClearSeconds（既定 30 秒）たつと消える（その間にほかのものをコピーしていれば消さない）。
+    .PARAMETER Query
+      対象の検索語（Get-PwEntry と同じ）。タイトルが完全に一致すればそれ、候補が複数なら選ぶ画面が出る。
+    .PARAMETER Field
+      コピーする項目（Name でも Label でもよい）。省略するとパスワード。
     .EXAMPLE
       Copy-PwField 社内ポータル            # パスワードをコピー
       Copy-PwField 社内ポータル Id         # ID をコピー

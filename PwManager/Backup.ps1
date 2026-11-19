@@ -21,8 +21,13 @@ function Save-PwArchive([string]$Zip) {
 function Backup-PwVault {
     <#
     .SYNOPSIS
-      保管庫（暗号化されたまま）と設定を ZIP にバックアップする。新しい PC への移行や、万一に備えて手で取る。
-      開く（Restore-PwVault で戻す）には回復キーが必要。
+      保管庫（暗号化されたまま）と設定を ZIP にバックアップする。
+    .DESCRIPTION
+      新しい PC への移行や、万一に備えて手で取る。戻す（Restore-PwVault）には回復キーが必要。
+    .PARAMETER Destination
+      保存先のフォルダー（無ければ作る）。ZIP の名前は PwManager-backup-<PC 名>-<日時>.zip。
+    .EXAMPLE
+      Backup-PwVault -Destination E:\Backup
     #>
     [CmdletBinding()]
     param([Parameter(Mandatory)][string]$Destination)
@@ -58,10 +63,20 @@ function Assert-PwGuiClosed {
 function Restore-PwVault {
     <#
     .SYNOPSIS
-      Backup-PwVault で作った ZIP から保管庫を復元する（回復キーが必要）。現在の保管庫は %APPDATA%\PwManager に退避される。
+      バックアップの ZIP から保管庫を復元する（回復キーが必要）。
     .DESCRIPTION
-      回復キーで開けることを確かめてから置き換える。続けて、この PC で使うマスターパスワードを設定する（以前と同じでもよい）。
+      現在の保管庫は %APPDATA%\PwManager に退避される。回復キーで開けることを確かめてから置き換える。続けて、この PC で使うマスターパスワードを設定する（以前と同じでもよい）。
       PwManager の画面を閉じてから、新しい PowerShell で実行すること。
+    .PARAMETER Path
+      Backup-PwVault で作った ZIP。
+    .PARAMETER IncludeConfig
+      設定（config.json）も戻す。
+    .PARAMETER RecoveryKey
+      回復キー（SecureString）。省略すると入力を求める。
+    .PARAMETER NewMasterPassword
+      この PC で使うマスターパスワード（SecureString）。省略すると 2 回入力を求める。
+    .EXAMPLE
+      Restore-PwVault -Path E:\Backup\PwManager-backup-PC01-20261118-090000.zip -IncludeConfig
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param(

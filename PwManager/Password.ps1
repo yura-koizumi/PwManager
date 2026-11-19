@@ -2,7 +2,20 @@
 # （PwManager.psm1 から読み込まれる）
 
 function New-PwPassword {
-    <# 暗号論的乱数でパスワードを生成。紛らわしい文字(0/O, 1/l/I)は除外。各文字種を最低1文字含む。 #>
+    <#
+    .SYNOPSIS
+      パスワードを生成する（保管庫には保存しない）。
+    .DESCRIPTION
+      暗号論的乱数で作る。紛らわしい文字（0/O、1/l/I）は使わず、大文字・小文字・数字（・記号）を最低 1 文字ずつ含む。
+    .PARAMETER Length
+      長さ（8 以上。省略すると設定の PasswordGenerator.Length、既定 20）。
+    .PARAMETER NoSymbols
+      記号を使わない。
+    .EXAMPLE
+      New-PwPassword -Length 24
+    .EXAMPLE
+      New-PwPassword -NoSymbols | Set-Clipboard
+    #>
     [CmdletBinding()]
     param([int]$Length, [switch]$NoSymbols)
     $g = (Get-PwConfig).PasswordGenerator

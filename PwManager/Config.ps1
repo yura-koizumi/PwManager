@@ -40,8 +40,16 @@ function Get-PwConfig {
 }
 
 function Edit-PwConfig {
-    <# 設定ファイルを開く（無ければ既定値のコピーを作る）。メモ帳 → 既定のアプリ → エクスプローラーの順に試し、
-       使った方法（'Notepad' / 'App' / 'Explorer'）を返す。メモ帳が無い環境（Windows Sandbox など）でも止まらない。 #>
+    <#
+    .SYNOPSIS
+      設定ファイル（config.json）を開く。
+    .DESCRIPTION
+      無ければ既定値のコピーを作る。メモ帳 → 既定のアプリ → エクスプローラーの順に試し、
+      使った方法（'Notepad' / 'App' / 'Explorer'）を返す。メモ帳が無い環境（Windows Sandbox など）でも止まらない。
+      保存したあと、PwManager を開き直すと反映される。
+    .EXAMPLE
+      Edit-PwConfig
+    #>
     [CmdletBinding()] param()
     Initialize-PwDataDir
     if (-not (Test-Path -LiteralPath $script:ConfigPath)) {

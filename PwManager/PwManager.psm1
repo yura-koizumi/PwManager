@@ -34,10 +34,10 @@ $script:AuditMaxBytes = 1MB     # これを超えたら audit.old.log に切り�
 #   Clipboard   クリップボード                Password    パスワード生成
 #   Backup      バックアップ・復元            Csv         CSV の取り込み・書き出し
 #   Setup       初期設定とショートカット      List        一覧のデータ（画面に依存しない）
-#   Cli         登録・編集・削除のコマンド
+#   Cli         登録・編集・削除のコマンド      Help        コマンドの一覧（Get-PwHelp）
 #   Gui.*       画面（Dialogs: 共通部品とダイアログ / List: 一覧 / Actions: 操作 / Main: メイン画面）
 foreach ($file in 'Config', 'Key', 'Vault', 'Clipboard', 'Password', 'Backup', 'Csv', 'Setup', 'List', 'Cli',
-                  'Gui.Dialogs', 'Gui.List', 'Gui.Actions', 'Gui.Main') {
+                  'Help', 'Gui.Dialogs', 'Gui.List', 'Gui.Actions', 'Gui.Main') {
     . (Join-Path $PSScriptRoot "$file.ps1")
 }
 

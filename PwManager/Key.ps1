@@ -226,7 +226,11 @@ function New-PwRecoveryKey {
     .DESCRIPTION
       保管庫を新しい保管庫キーで暗号化し直し、新しい回復キーを表示する。
       それまでのバックアップは古い回復キーで開けるので、不要なら削除して取り直すこと。
-      PwManager の画面を閉じてから実行する。
+      PwManager の画面を閉じてから実行する。新しい回復キーは、デスクトップのテキストファイルにも保存する。
+    .PARAMETER MasterPassword
+      マスターパスワード（SecureString）。省略すると入力を求める。
+    .EXAMPLE
+      New-PwRecoveryKey
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param([securestring]$MasterPassword)

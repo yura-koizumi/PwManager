@@ -174,24 +174,46 @@ Excel で開いたときに数式として実行されないよう、`=` `+` `-`
 
 ## 6. PowerShell から使う
 
+`Get-PwHelp` でコマンドの一覧を、`Get-PwHelp <コマンド>` で引数の説明と例を表示します。
+
 | コマンド | 内容 |
 | --- | --- |
 | `pwm` | 画面を開く |
-| `Get-PwEntry ポータル` | 一覧を検索する（1 件 1 行の表。パスワードは表示しない。全項目を見るときは後ろに Format-List * をパイプでつなぐ） |
-| `Copy-PwField ポータル` | パスワードをコピーする |
-| `Copy-PwField ポータル Id` | ID をコピーする |
+| `Get-PwEntry ポータル` | 検索する（1 件 1 行の表。パスワードは表示しない） |
+| `Copy-PwField ポータル` | パスワードをコピーする（`Copy-PwField ポータル Id` で ID） |
 | `New-PwEntry Amazon -Fields @{ ID = 'taro'; URL = 'https://…' } -Generate` | 登録する（`-Generate` でパスワードを生成。付けなければ入力を求める） |
 | `Set-PwEntry Amazon -Fields @{ URL = 'https://…' }` | 指定した項目だけ変える（`-Title` でタイトル、`-Generate` / `-PromptPassword` でパスワード） |
 | `Remove-PwEntry Amazon` | 削除する（確認あり） |
 | `New-PwPassword -Length 24` | パスワードを生成する |
 | `Edit-PwConfig` | 設定ファイルを開く |
 | `Backup-PwVault` / `Restore-PwVault` | バックアップ・復元 |
+| `Import-PwCsv` / `Export-PwCsv` | CSV の取り込み・書き出し |
 | `Set-PwMasterPassword` | マスターパスワードを変更する（`-UseRecoveryKey` で、忘れたときに回復キーで変更） |
 | `New-PwRecoveryKey` | 保管庫の鍵と回復キーを作り直す |
-| `Import-PwCsv` / `Export-PwCsv` | CSV の取り込み・書き出し |
+| `Get-PwHelp` | コマンドの一覧 |
+
+### 検索と件数
+
+```powershell
+Get-PwEntry ポータル 管理           # 空白で区切ると、すべての語を含むもの
+Get-PwEntry url:example id:taro     # 「項目:文字」で、その項目だけを探す（項目名は ID・URL・title など）
+Get-PwEntry                         # 既定では 50 件まで。残りがあれば件数を知らせる
+Get-PwEntry -All                    # 全件
+Get-PwEntry -Skip 50 -First 50      # 51〜100 件目
+```
+
+結果はふつうの PowerShell のオブジェクトなので、並べ替えや細かい絞り込みは標準のコマンドでできます。
+
+```powershell
+Get-PwEntry -All | Sort-Object Updated -Descending | Select-Object -First 10   # 最近更新した 10 件
+Get-PwEntry ポータル | Format-List *                                          # 全項目を表示
+Get-PwEntry -All | Out-GridView                                              # 表の画面で見る
+```
+
+### 注意
 
 - パスワードは引数に平文で書かず、`-Generate` で生成するか、入力欄に入力します（コマンドの履歴に残さないため）。
-- `Get-PwEntry 旧 | Remove-PwEntry` のように、検索結果をパイプで渡すこともできます。検索語に複数のエントリが当てはまるときは、選ぶ画面が出ます。
+- `Get-PwEntry 旧 | Remove-PwEntry` のように、検索結果をパイプで渡すこともできます。`Copy-PwField` などに検索語を渡して複数のエントリが当てはまるときは、選ぶ画面が出ます（件数は区切りません）。
 - 保管庫に書き込むコマンド（登録・編集・削除・CSV の取り込み・マスターパスワードの変更）は、PwManager の画面を閉じてから実行します。
 - 保管庫がロックされているときは、マスターパスワードを尋ねます（3 回まで）。
 
@@ -248,6 +270,7 @@ PwManager\                 … 配布用フォルダー
     Setup.ps1              … 初期設定とショートカット
     List.ps1               … 一覧のデータ（表の作成・検索条件・1 行単位の更新）。画面に依存せず、tests\List.Tests.ps1 で検証
     Cli.ps1                … 登録・編集・削除のコマンド（New-PwEntry / Set-PwEntry / Remove-PwEntry）
+    Help.ps1               … コマンドの一覧（Get-PwHelp）。コマンドを足したら、ここの分類にも追加する
     Gui.Dialogs.ps1        … 画面の共通部品とダイアログ（ロック解除・登録/編集）
     Gui.List.ps1           … 一覧の画面側（List.ps1 のデータをグリッド・検索欄に結び付ける）
     Gui.Actions.ps1        … 画面の操作（コピー・登録・編集・削除・バックアップ・ロック）
