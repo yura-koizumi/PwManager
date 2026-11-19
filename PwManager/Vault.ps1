@@ -167,17 +167,33 @@ function Remove-PwEntry {
 
 $script:MasterPasswordMinLength = 12
 
-function Test-PwMasterPasswordRule([securestring]$New, [securestring]$Confirm, [securestring]$Current) {
-    # 新しいマスターパスワードの確認。問題があればその理由を、無ければ $null を返す
-    $a = ConvertFrom-PwSecureString $New
-    $b = ConvertFrom-PwSecureString $Confirm
-    $c = if ($Current) { ConvertFrom-PwSecureString $Current } else { $null }
+function Test-PwSecureStringEqual([securestring]$A, [securestring]$B) {
+    # 2 つの SecureString が同じかを、平文の文字列を作らずに比べる（1 文字ずつ、大文字小文字も区別）。
+    # 比べるために一時的に取り出した領域は、ZeroFreeBSTR でゼロにしてから解放する
+    if ($null -eq $A -or $null -eq $B) { return ($null -eq $A -and $null -eq $B) }
+    if ($A.Length -ne $B.Length) { return $false }
+    $M = [Runtime.InteropServices.Marshal]
+    $pa = [IntPtr]::Zero; $pb = [IntPtr]::Zero
     try {
-        if ($a -cne $b) { return '新しいパスワードが一致しません。' }
-        if ($a.Length -lt $script:MasterPasswordMinLength) { return "$($script:MasterPasswordMinLength) 文字以上にしてください。" }
-        if ($null -ne $c -and $a -ceq $c) { return '今のパスワードと同じです。' }
-        $null
-    } finally { $a = $null; $b = $null; $c = $null }
+        $pa = $M::SecureStringToBSTR($A)
+        $pb = $M::SecureStringToBSTR($B)
+        $same = $true
+        for ($i = 0; $i -lt $A.Length; $i++) {
+            if ($M::ReadInt16($pa, $i * 2) -ne $M::ReadInt16($pb, $i * 2)) { $same = $false }   # 途中で抜けない（比べる時間を一定にする）
+        }
+        $same
+    } finally {
+        if ($pa -ne [IntPtr]::Zero) { $M::ZeroFreeBSTR($pa) }
+        if ($pb -ne [IntPtr]::Zero) { $M::ZeroFreeBSTR($pb) }
+    }
+}
+
+function Test-PwMasterPasswordRule([securestring]$New, [securestring]$Confirm, [securestring]$Current) {
+    # 新しいマスターパスワードの確認。問題があればその理由を、無ければ $null を返す（平文の文字列は作らない）
+    if (-not (Test-PwSecureStringEqual $New $Confirm)) { return '新しいパスワードが一致しません。' }
+    if ($New.Length -lt $script:MasterPasswordMinLength) { return "$($script:MasterPasswordMinLength) 文字以上にしてください。" }
+    if ($Current -and (Test-PwSecureStringEqual $New $Current)) { return '今のパスワードと同じです。' }
+    $null
 }
 
 function Read-PwNewMasterPassword([securestring]$Current) {

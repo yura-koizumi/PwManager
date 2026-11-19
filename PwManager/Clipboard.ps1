@@ -1,10 +1,18 @@
 ﻿# Clipboard.ps1 - クリップボード
 # （PwManager.psm1 から読み込まれる）
 
+# クリップボードの内容がまだ自分のコピーかを確かめるためのハッシュの鍵。起動のたびに乱数で作り、どこにも保存しない。
+# 鍵付き（HMAC）にしておくと、メモリーに残ったハッシュから元のパスワードを総当たりで割り出せない
+$script:ClipHashKey = New-Object byte[] 32
+$rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($script:ClipHashKey); $rng.Dispose()
+Remove-Variable rng
+
 function Get-PwTextHash([string]$Text) {
-    $sha = [Security.Cryptography.SHA256]::Create()
-    try { [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))) }
-    finally { $sha.Dispose() }
+    # 同じプロセスの中でだけ比べられるハッシュ。作業用のバイト列は使い終わったらゼロで埋める
+    $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
+    $hmac = [Security.Cryptography.HMACSHA256]::new($script:ClipHashKey)
+    try { [BitConverter]::ToString($hmac.ComputeHash($bytes)) }
+    finally { [Array]::Clear($bytes, 0, $bytes.Length); $hmac.Dispose() }
 }
 
 $script:ClipSeqSignature = '[DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();'
@@ -44,6 +52,7 @@ function Clear-PwClipboardIfMatch([uint32]$Sequence, [string]$Hash) {
         if (-not $match -and $Hash) {
             $cur = [System.Windows.Forms.Clipboard]::GetText()
             $match = $cur -and (Get-PwTextHash $cur) -eq $Hash
+            $cur = $null
         }
         if ($match) { [System.Windows.Forms.Clipboard]::Clear(); return $true }
     } catch { }

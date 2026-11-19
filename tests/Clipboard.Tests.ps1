@@ -17,6 +17,13 @@ try {
     $h = & $Pwm { Get-PwTextHash 'Secret-3' }
     Check '同じ内容が置き直されても、ハッシュ併用なら消す' (& $Pwm { param($s, $h) Clear-PwClipboardIfMatch $s $h } $seq $h)
 
+    Write-Host '内容のハッシュ（鍵付き）'
+    $h1 = & $Pwm { Get-PwTextHash 'Secret-3' }
+    $plainSha = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes('Secret-3')))
+    Check '同じプロセスでは同じ内容から同じハッシュ' ($h1 -eq (& $Pwm { Get-PwTextHash 'Secret-3' }))
+    Check '内容が違えば違うハッシュ'               ($h1 -ne (& $Pwm { Get-PwTextHash 'Secret-4' }))
+    Check '鍵なしの SHA-256 とは違う（ハッシュから元の値を割り出せない）' ($h1 -ne $plainSha)
+
     Write-Host 'コンソールからのコピー（別プロセスで消去）'
     $global:captured = $null
     function global:Start-Process { param($FilePath, $WindowStyle, $ArgumentList) $global:captured = $ArgumentList }

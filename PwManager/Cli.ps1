@@ -38,11 +38,8 @@ function Read-PwEntryPassword {
     while ($true) {
         $p1 = Read-Host 'パスワード' -AsSecureString
         $p2 = Read-Host '確認のためもう一度' -AsSecureString
-        $a = ConvertFrom-PwSecureString $p1; $b = ConvertFrom-PwSecureString $p2
-        try {
-            if (-not $a) { Write-Warning 'パスワードを入力してください。'; continue }
-            if ($a -cne $b) { Write-Warning '一致しません。もう一度入力してください。'; continue }
-        } finally { $a = $null; $b = $null }
+        if ($p1.Length -eq 0) { Write-Warning 'パスワードを入力してください。'; continue }
+        if (-not (Test-PwSecureStringEqual $p1 $p2)) { Write-Warning '一致しません。もう一度入力してください。'; continue }
         return $p1
     }
 }

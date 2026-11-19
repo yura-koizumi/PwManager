@@ -27,6 +27,16 @@ Check '今と同じものは不可'         ($null -ne (& $rule (S 'old-password
 Check '大文字小文字の違いは別物'   ($null -ne (& $rule (S 'New-password-123') (S 'new-password-123') $null))
 Check '条件を満たせば $null'       ($null -eq (& $rule (S 'new-password-123') (S 'new-password-123') (S 'old-password-123')))
 
+Write-Host '平文の文字列を作らない比較（Test-PwSecureStringEqual）'
+$eq = { param($a, $b) & $Pwm { param($a, $b) Test-PwSecureStringEqual $a $b } $a $b }
+Check '同じなら一致'                   (& $eq (S 'abc-DEF-123!') (S 'abc-DEF-123!'))
+Check '大文字小文字が違えば不一致'     (-not (& $eq (S 'abc') (S 'abC')))
+Check '長さが違えば不一致'             (-not (& $eq (S 'abc') (S 'abcd')))
+Check '最後の 1 文字だけ違っても不一致' (-not (& $eq (S 'password-1234') (S 'password-1235')))
+Check '日本語・絵文字も比べられる'     ((& $eq (S 'パスワード🔑です') (S 'パスワード🔑です')) -and -not (& $eq (S 'パスワード🔑です') (S 'パスワード🔒です')))
+$empty1 = New-Object System.Security.SecureString; $empty2 = New-Object System.Security.SecureString
+Check '空どうしは一致、空と空でないものは不一致' ((& $eq $empty1 $empty2) -and -not (& $eq $empty1 (S 'a')))
+
 Write-Host 'マスターパスワードの変更（Set-PwMasterPassword）'
 $err = $null
 try { Set-PwMasterPassword -Current (S 'wrong-password-1') -New (S 'new-password-123') -Confirm:$false } catch { $err = $_ }

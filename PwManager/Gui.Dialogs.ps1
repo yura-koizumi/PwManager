@@ -96,6 +96,7 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
         } finally { $dlg.UseWaitCursor = $false }
     })
     $dlg.Add_Shown({ $dlg.Activate(); [void]$tb.Focus() })
+    $dlg.Add_FormClosing({ $tb.Clear() })   # キャンセルで閉じたときも、入力欄に残さない
 
     if ($ui.Form -and $ui.Form.Visible) {
         $dlg.StartPosition = 'CenterParent'; [void]$dlg.ShowDialog($ui.Form)
@@ -163,6 +164,7 @@ function Show-PwChangePasswordDialog($ui) {
         }
     })
     $dlg.Add_Shown({ [void]$boxes['Current'].Focus() })
+    $dlg.Add_FormClosing({ foreach ($b in $boxes.Values) { $b.Clear() } })   # キャンセルで閉じたときも、入力欄に残さない
     Register-PwActivity $ui $dlg
     [void]$dlg.ShowDialog($ui.Form)
     $dlg.Dispose()
@@ -247,6 +249,7 @@ function Show-PwEditDialog($ui, $Entry) {
         }
     })
     $dlg.Add_Shown({ [void]$title.Focus() })
+    $dlg.Add_FormClosing({ $pw.Clear() })   # キャンセルで閉じたときも、パスワード欄に残さない
     Register-PwActivity $ui $dlg
 
     [void]$dlg.ShowDialog($ui.Form)
