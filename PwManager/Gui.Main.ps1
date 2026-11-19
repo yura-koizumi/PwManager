@@ -1,6 +1,35 @@
 ﻿# Gui.Main.ps1 - メイン画面（Show-PwManager）
 # （PwManager.psm1 から読み込まれる）
 
+function New-PwUiState($Cfg) {
+    <# 画面の状態（各関数に $ui として渡す）。項目はここで定義したものだけで、
+       定義していない名前に書き込むとエラーになる（打ち間違いを防ぐため）。項目を足すときはここに追加する。 #>
+    [pscustomobject]@{
+        # 設定とデータ
+        Cfg           = $Cfg                     # 起動時に読んだ設定（表示中は変わらない）
+        CategoryField = @($Cfg.Fields | Where-Object { $_.Type -eq 'Category' }) | Select-Object -First 1   # 絞り込みに使う項目（無ければ $null）
+        List          = New-PwList $Cfg          # 一覧のデータ（List.ps1）
+        # 画面の部品（Show-PwManager で作る）
+        Form          = $null                    # メイン画面
+        Font          = New-Object System.Drawing.Font('Yu Gothic UI', 10)
+        Search        = $null                    # 検索欄
+        Category      = $null                    # カテゴリの絞り込み欄
+        Grid          = $null                    # 一覧
+        Status        = $null                    # 状態表示（左下）
+        ClipLabel     = $null                    # クリップボード消去までの秒数
+        Count         = $null                    # 件数表示
+        Panels        = @()                      # ロック中に無効にする部品
+        # 動作の状態
+        Suspend       = $false                   # $true の間は一覧を更新しない（カテゴリ欄の作り直し中など）
+        SelectName    = $null                    # 次の一覧更新で選ぶ行（シークレット名）
+        ClipSeq       = $null                    # コピーしたときのクリップボードの番号（自動消去の判定用）
+        ClipHash      = $null                    # コピーした内容のハッシュ（自動消去の判定用）
+        ClipExpire    = $null                    # クリップボードを消去する時刻
+        LastActivity  = Get-Date                 # 最後に操作した時刻（自動ロックの判定用）
+        UnlockedAt    = $null                    # 最後にロックを解除した時刻（再入力の判定用）
+        Locking       = $false                   # ロック処理中
+    }
+}
 
 function Show-PwManager {
     <#
@@ -24,14 +53,7 @@ function Show-PwManager {
         [System.Windows.Forms.Application]::EnableVisualStyles()
         $cfg = Get-PwConfig
         $script:PinnedConfig = $cfg
-        $ui = @{
-            Cfg = $cfg; Form = $null; Suspend = $false; SelectName = $null
-            List = (New-PwList $cfg)
-            Font = New-Object System.Drawing.Font('Yu Gothic UI', 10)
-            ClipSeq = $null; ClipHash = $null; ClipExpire = $null
-            LastActivity = Get-Date; UnlockedAt = $null; Locking = $false
-            CategoryField = @($cfg.Fields | Where-Object { $_.Type -eq 'Category' }) | Select-Object -First 1
-        }
+        $ui = New-PwUiState $cfg
 
         if (-not (Show-PwUnlockDialog $ui)) { return }
 

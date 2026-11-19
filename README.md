@@ -221,7 +221,7 @@ PwManager\                 … 配布用フォルダー
     Gui.Dialogs.ps1        … 画面の共通部品とダイアログ（ロック解除・登録/編集）
     Gui.List.ps1           … 一覧の画面側（List.ps1 のデータをグリッド・検索欄に結び付ける）
     Gui.Actions.ps1        … 画面の操作（コピー・登録・編集・削除・バックアップ・ロック）
-    Gui.Main.ps1           … メイン画面
+    Gui.Main.ps1           … メイン画面と、画面の状態（$ui）の定義 New-PwUiState。$ui に項目を足すときはここに追加する
     Launch.ps1             … ショートカットから呼び出される起動スクリプト
     config.default.json    … 設定の既定値
 
