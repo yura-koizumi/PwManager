@@ -1,0 +1,2 @@
+# 改行コードを LF に統一（BOM はそのまま保持される）
+* text=auto eol=lf

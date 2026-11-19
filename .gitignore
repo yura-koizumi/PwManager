@@ -1,0 +1,12 @@
+# パスワードや個人データを含み得るファイル（絶対にコミットしない）
+*.csv
+*.zip
+config.json
+state.json
+audit.log
+pre-restore-*
+
+# エディター・ツールのローカル設定
+.vscode/
+.claude/settings.local.json
+Thumbs.db
