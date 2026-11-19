@@ -25,6 +25,7 @@ $script:AuditPath     = Join-Path $script:DataDir 'audit.log'
 $script:StoreRoot     = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secretmanagement'
 $script:ReservedKeys  = @('Name', 'Title', 'Password', 'Created', 'Updated', 'Schema')
 $script:DateFormat    = 'yyyy-MM-dd HH:mm:ss'
+$script:PinnedConfig  = $null   # 画面の表示中だけ設定される（Get-PwConfig 参照）
 
 #region 設定・状態・監査ログ ---------------------------------------------------
 
@@ -40,7 +41,9 @@ function Read-PwJson([string]$Path) {
 
 function Get-PwConfig {
     <# 既定値(config.default.json)にユーザー設定(config.json)を上書きして返す。
-       将来、既定値に新しい項目を追加しても、ユーザー設定を書き換えずに反映される。 #>
+       将来、既定値に新しい項目を追加しても、ユーザー設定を書き換えずに反映される。
+       画面の表示中は、起動時に読んだ設定を返す（途中で設定ファイルを書き換えても、開き直すまで反映しない）。 #>
+    if ($script:PinnedConfig) { return $script:PinnedConfig }
     $cfg = @{}
     $default = Read-PwJson (Join-Path $script:ModuleRoot 'config.default.json')
     foreach ($p in $default.PSObject.Properties) { $cfg[$p.Name] = $p.Value }
@@ -209,9 +212,13 @@ function Save-PwEntry {
     $meta['Title']   = $Title.Trim()
     $meta['Updated'] = $now
     $meta['Schema']  = $script:SchemaVersion
-    foreach ($f in @($cfg.Fields)) {
-        $v = $Fields[$f.Name]
-        $meta[$f.Name] = if ($null -eq $v) { '' } else { ([string]$v).Trim() }
+    # 渡された項目だけを上書きする（渡されなかった項目の既存データは消さない）
+    foreach ($k in @($Fields.Keys)) {
+        if ($k -notmatch '^[A-Za-z][A-Za-z0-9_]*$' -or $script:ReservedKeys -contains $k) {
+            throw "項目名 '$k' は使えません。"
+        }
+        $v = $Fields[$k]
+        $meta[$k] = if ($null -eq $v) { '' } else { ([string]$v).Trim() }
     }
 
     $pwChanged = $Password -and $Password.Length -gt 0

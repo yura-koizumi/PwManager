@@ -383,6 +383,7 @@ function Show-PwManager {
     try {
         [System.Windows.Forms.Application]::EnableVisualStyles()
         $cfg = Get-PwConfig
+        $script:PinnedConfig = $cfg
         $ui = @{
             Cfg = $cfg; Entries = @(); Form = $null; Suspend = $false; SelectName = $null
             Font = New-Object System.Drawing.Font('Yu Gothic UI', 10)
@@ -569,6 +570,7 @@ function Show-PwManager {
 
         [void]$form.ShowDialog()
     } finally {
+        $script:PinnedConfig = $null
         if ($ui -and $ui.ClipHash) { [void](Clear-PwClipboardIfMatch $ui.ClipHash) }
         if ($form) { $form.Dispose() }
         $mutex.ReleaseMutex()
