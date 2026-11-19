@@ -63,6 +63,7 @@ function Write-Kept {
     Write-Host '[3/3] 保管庫のデータと設定は残しました。Install.bat を実行すれば、そのまま使えます。' -ForegroundColor Green
     if (Test-Path -LiteralPath $storeDir) { Write-Host "  保管庫: $storeDir" }
     if (Test-Path -LiteralPath $dataDir)  { Write-Host "  設定  : $dataDir" }
+    Write-Host '  あとでデータも削除するときは、もう一度 Uninstall.bat を実行してください（プログラムを削除したあとでも使えます）。'
 }
 
 if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $dataDir)) {

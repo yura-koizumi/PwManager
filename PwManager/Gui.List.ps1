@@ -54,7 +54,7 @@ function Set-PwUiListData($ui, $Infos) {
 }
 
 function Update-PwUiData($ui) {
-    # 全件の読み直し（起動時・ロック解除時・F5）
+    # 全件の読み込み（起動時）
     $ui.Form.UseWaitCursor = $true
     try {
         if (-not $ui.SelectName) { $ui.SelectName = Get-PwUiSelectedName $ui }

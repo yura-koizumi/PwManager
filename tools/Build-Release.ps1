@@ -59,7 +59,8 @@ Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $out).FullName -Destin
 # Windows Sandbox の設定（ホストのフォルダーは読み取り専用で割り当てるため、Sandbox から書き換えられない）
 #   軽くするため、メモリーを 2 GB にし、マイク・カメラ・プリンターは使わない。
 #   ネットワーク（初回のモジュール導入に必要）とクリップボード（結果を貼り付けるため）は使う。
-#   Windows 11 の Sandbox にはメモ帳が無いため、ホストの従来のメモ帳を C:\Tools に割り当て、PATH と .txt に登録する
+#   Windows 11 はメモ帳の起動をストア版に切り替える（IFEO）が、Sandbox にはストア版が無いため、起動時にその切り替えを外す。
+#   Sandbox に従来のメモ帳も無いときに備えて、ホストのものを C:\Tools に割り当てておく
 $wsb = Join-Path $releaseDir 'PwManager-Sandbox.wsb'
 $sandboxFolder = 'C:\Users\WDAGUtilityAccount\Desktop\PwManager'
 $tools = Join-Path $releaseDir 'sandbox-tools'
@@ -79,9 +80,14 @@ if (Test-Path -LiteralPath (Join-Path $sys 'notepad.exe')) {
 @(
     '@echo off'
     'rem Run at Sandbox logon: make Notepad available, then open the PwManager folder'
-    'if exist C:\Tools\notepad.exe ('
+    'rem Windows redirects notepad.exe to the Store app (IFEO), which the Sandbox does not have. Remove the redirect.'
+    'reg delete "HKLM\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Image File Execution Options\notepad.exe" /f >nul 2>&1'
+    'reg delete "HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\FileExts\.txt\UserChoice" /f >nul 2>&1'
+    'assoc .txt=txtfile >nul 2>&1'
+    'if exist "%windir%\System32\notepad.exe" ('
+    '  ftype txtfile="%windir%\System32\notepad.exe" "%%1" >nul 2>&1'
+    ') else ('
     '  setx PATH "C:\Tools" >nul'
-    '  assoc .txt=txtfile >nul 2>&1'
     '  ftype txtfile="C:\Tools\notepad.exe" "%%1" >nul 2>&1'
     ')'
     "start `"`" explorer.exe $sandboxFolder"

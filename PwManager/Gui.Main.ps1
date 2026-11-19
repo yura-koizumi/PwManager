@@ -102,7 +102,6 @@ function Show-PwManager {
             $item.Tag = $Action
             $item.Add_Click({ param($s) Invoke-PwUi $ui $s.Tag })
         }
-        & $addItem $appMenu '再読込' 'F5' { Update-PwUiData $ui; Set-PwUiStatus $ui '再読込しました。' }
         & $addItem $appMenu 'バックアップ' '' { Invoke-PwUiBackup $ui }
         & $addItem $appMenu 'マスターパスワードの変更...' '' { Invoke-PwUiChangePassword $ui }
         & $addItem $appMenu '設定ファイルを開く...' '' { Invoke-PwUiConfig $ui }
@@ -202,7 +201,6 @@ function Show-PwManager {
             elseif ($e.Control -and $e.KeyCode -eq 'N') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { New-PwUiEntry $ui } }
             elseif ($e.Control -and $e.KeyCode -eq 'L') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Lock-PwUi $ui } }
             elseif ($e.KeyCode -eq 'F2') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Edit-PwUiEntry $ui } }
-            elseif ($e.KeyCode -eq 'F5') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Update-PwUiData $ui } }
         })
 
         # 1秒ごと: クリップボード消去のカウントダウンと、無操作時の自動ロック

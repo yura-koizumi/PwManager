@@ -148,12 +148,25 @@ function Test-PwMatch($Entry, [string]$Query, $Cfg) {
 }
 
 function Get-PwEntry {
-    <# 登録済みエントリの一覧（パスワードは含まない） #>
+    <#
+    .SYNOPSIS
+      登録済みエントリの一覧（パスワードは含まない）。
+    .DESCRIPTION
+      画面には 1 件 1 行の表で、タイトル・1 行の項目 2 つ・更新日時だけを表示する（件数が多くても読めるように）。
+      ほかの項目も見るときは | Format-List * を付ける。
+    #>
     [CmdletBinding()]
     param([Parameter(Position = 0)][string]$Filter)
     $cfg = Get-PwConfig
     $keys = Get-PwEntryKeys $cfg
-    $list = @(foreach ($i in Get-PwSecretInfo) { ConvertTo-PwEntry $i.Name $i.Metadata $keys })
+    # 表示する列（PowerShell は 5 列以上だと縦に並べるため、4 列までにする）
+    $shown = @('Title') + @($cfg.Fields | Where-Object { -not $_.Multiline } | Select-Object -First 2 | ForEach-Object { $_.Name }) + @('Updated')
+    Update-TypeData -TypeName 'PwManager.Entry' -DefaultDisplayPropertySet $shown -Force
+    $list = @(foreach ($i in Get-PwSecretInfo) {
+        $e = ConvertTo-PwEntry $i.Name $i.Metadata $keys
+        $e.PSObject.TypeNames.Insert(0, 'PwManager.Entry')
+        $e
+    })
     if ($Filter) { $list = @($list | Where-Object { Test-PwMatch $_ $Filter $cfg }) }
     $list | Sort-Object Title
 }
