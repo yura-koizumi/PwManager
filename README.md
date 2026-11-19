@@ -9,7 +9,9 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 ## 1. セットアップ（初回・アップデート共通）
 
 1. このフォルダー（`PwManager`）を PC の任意の場所に置きます。
-2. フォルダー内で Shift + 右クリック →「PowerShell ウィンドウをここで開く」を選び、次を実行します。
+2. フォルダー内の `Install.bat` をダブルクリックします。
+
+   PowerShell から実行する場合は、フォルダー内で Shift + 右クリック →「PowerShell ウィンドウをここで開く」を選び、次を実行します。
 
    ```powershell
    powershell -NoProfile -ExecutionPolicy Bypass -File .\Install.ps1
@@ -22,7 +24,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 
 最初の導入時だけ、PowerShell Gallery（インターネット）からモジュールをダウンロードします。それ以降の利用はすべて PC の中で完結します。
 
-> **アップデートするとき**：新しい `PwManager` フォルダーで同じ `Install.ps1` を実行します。設定と保管庫のデータは別の場所にあるため、そのまま残ります。
+> **アップデートするとき**：新しい `PwManager` フォルダーで同じ `Install.bat`（または `Install.ps1`）を実行します。設定と保管庫のデータは別の場所にあるため、そのまま残ります。
 
 ### 最初にやっておくこと：バックアップ先の設定
 

@@ -41,7 +41,13 @@ $gpo = @('MachinePolicy', 'UserPolicy' | ForEach-Object { Get-ExecutionPolicy -S
 if ($gpo) {
     Write-Host "[2/4] 実行ポリシーはグループポリシーで管理されています（$($gpo -join ', ')）。変更しません。"
 } elseif ($cu -in 'Restricted', 'AllSigned' -or ($cu -eq 'Undefined' -and $lm -in 'Restricted', 'AllSigned', 'Undefined')) {
-    Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+    # -ExecutionPolicy Bypass で起動していると Process スコープが優先されるため、
+    # 設定は保存されても ExecutionPolicyOverride が投げられる。これは成功扱いにする。
+    try {
+        Set-ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+    } catch [System.Security.SecurityException] {
+        if ($_.FullyQualifiedErrorId -notlike 'ExecutionPolicyOverride*') { throw }
+    }
     Write-Host '[2/4] 実行ポリシーを RemoteSigned（現在のユーザーのみ）に設定しました。'
 } else {
     Write-Host "[2/4] 実行ポリシーは変更不要です（CurrentUser=$cu, LocalMachine=$lm）。"
