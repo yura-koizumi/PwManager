@@ -33,3 +33,13 @@ function Complete-Test {
     Remove-Item -LiteralPath $TestRoot -Recurse -Force -ErrorAction SilentlyContinue
     exit $script:Failures
 }
+
+# 保管庫キーまわり（テストでは PBKDF2 の回数を減らして速くする）
+& $Pwm { $script:KdfIterations = 1000 }
+function global:S([string]$t) { ConvertTo-SecureString $t -AsPlainText -Force }
+function global:Plain([securestring]$s) { [pscredential]::new('x', $s).GetNetworkCredential().Password }
+function global:New-TestKey([string]$MasterPassword) {
+    # 保管庫キーを作る。@{ StorePassword（SecretStore に渡す文字列）; RecoveryKey } を返す
+    $set = & $Pwm { param($p) New-PwVaultKeySet $p } (S $MasterPassword)
+    @{ StorePassword = (Plain $set.StorePassword); RecoveryKey = $set.RecoveryKey }
+}

@@ -63,7 +63,8 @@ if ((Resolve-Path $src).Path.TrimEnd('\') -ne $dst.TrimEnd('\')) {
     Copy-Item -LiteralPath $src -Destination $dst -Recurse
 }
 Get-ChildItem -LiteralPath $dst -Recurse -File | Unblock-File
-$ver = (Import-PowerShellDataFile (Join-Path $dst 'PwManager.psd1')).ModuleVersion
+$psd = Import-PowerShellDataFile (Join-Path $dst 'PwManager.psd1')
+$ver = $psd.ModuleVersion + $(if ($psd.PrivateData.PSData.Prerelease) { '-' + $psd.PrivateData.PSData.Prerelease })
 Write-Host "[3/4] プログラムを配置しました: $dst (v$ver)"
 
 # --- 4. 初期設定（設定ファイル・保管庫・マスターパスワード）とショートカット -------------------

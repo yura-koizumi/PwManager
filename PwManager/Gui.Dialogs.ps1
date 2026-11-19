@@ -141,7 +141,7 @@ function Show-PwChangePasswordDialog($ui) {
     }
     $hint = New-PwControl Label @{
         AutoSize = $true; MaximumSize = (New-PwSize 300 0); ForeColor = [System.Drawing.SystemColors]::GrayText
-        Text = "$($script:MasterPasswordMinLength) 文字以上で、ほかでは使っていないもの。保存済みのデータはそのまま使えます。変更前のバックアップを戻すときは、変更前のパスワードが必要です。"
+        Text = "$($script:MasterPasswordMinLength) 文字以上で、ほかでは使っていないもの。保存済みのデータもバックアップも、そのまま使えます。"
     }
     $t.Controls.Add($hint, 1, $r); $r++
     $err = New-PwControl Label @{ AutoSize = $true; ForeColor = [System.Drawing.Color]::Firebrick; MaximumSize = (New-PwSize 300 0) }

@@ -1,10 +1,11 @@
 ﻿# 模擬データで画面を開く（動作の軽さの確認用。実際の保管庫や設定には触れない）
 #   powershell -NoProfile -STA -ExecutionPolicy Bypass -File .\tests\Demo-Gui.ps1 -Count 3000
-#   マスターパスワードの画面では、何を入力しても開きます。
+#   マスターパスワードは demo-password-1 です。
 param([int]$Count = 1000)
 
 . (Join-Path $PSScriptRoot 'TestHelper.ps1')
 function global:Unlock-SecretStore { param($Password, $PasswordTimeout) }
+[void](New-TestKey 'demo-password-1')
 
 $cats = '仕事', '社内システム', '取引先', '共通', 'その他'
 $sec = ConvertTo-SecureString 'demo-password' -AsPlainText -Force

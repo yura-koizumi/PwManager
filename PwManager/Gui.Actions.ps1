@@ -71,7 +71,7 @@ function Remove-PwUiEntry($ui) {
 function Invoke-PwUiBackup($ui) {
     # 移行や万一に備えて、手でバックアップを取る（保存先は毎回選ぶ）
     $fb = New-Object System.Windows.Forms.FolderBrowserDialog
-    $fb.Description = "バックアップの保存先を選んでください（USB メモリーなど）。`n開くには、いまのマスターパスワードが必要です。"
+    $fb.Description = "バックアップの保存先を選んでください（USB メモリーなど）。`n戻すときは、回復キーが必要です。"
     if ($fb.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
     $zip = Backup-PwVault -Destination $fb.SelectedPath
     Set-PwUiStatus $ui "バックアップしました: $($zip.FullName)"
@@ -90,12 +90,7 @@ function Invoke-PwUiChangePassword($ui) {
     $r = Show-PwChangePasswordDialog $ui
     if (-not $r) { return }
     $ui.UnlockedAt = Get-Date   # 新しいパスワードでロック解除済み
-    $lines = @('マスターパスワードを変更しました。次回からは新しいパスワードで開きます。',
-               '変更前のパスワードで開ける一時ファイルは削除しました。',
-               '', 'これまでに手で取ったバックアップ（ZIP）は、変更前のパスワードで開けます。',
-               '変更前のパスワードが漏れた心配があるときは、それらも削除して、取り直してください。')
-    Show-PwMessage ($lines -join "`n")
-    Set-PwUiStatus $ui 'マスターパスワードを変更しました。'
+    Set-PwUiStatus $ui 'マスターパスワードを変更しました。次回からは新しいパスワードで開きます。'
 }
 
 function Lock-PwUi($ui) {

@@ -1,13 +1,13 @@
 ﻿. (Join-Path $PSScriptRoot 'TestHelper.ps1')
 
-# 正しいパスワード以外では失敗する SecretStore を模擬する
+# 保管庫キーをマスターパスワード 'right-password' で作り、SecretStore は渡された保管庫キーだけを受け付ける
 $global:UnlockCalls = 0
+$global:Key = New-TestKey 'right-password'
 function global:Unlock-SecretStore {
     param([securestring]$Password, $PasswordTimeout)
     $global:UnlockCalls++
-    if ([pscredential]::new('x', $Password).GetNetworkCredential().Password -ne 'right-password') { throw 'Password is incorrect.' }
+    if ((Plain $Password) -ne $global:Key.StorePassword) { throw 'Password is incorrect.' }
 }
-function global:S([string]$t) { ConvertTo-SecureString $t -AsPlainText -Force }
 $failFile = Join-Path $env:APPDATA 'PwManager\unlock.json'
 function global:Try-Unlock([string]$pw) { try { & $Pwm { param($p) Invoke-PwUnlock (S $p) } $pw; 'ok' } catch { $_.Exception.Message } }
 function global:Set-LastFailure([int]$SecondsAgo) {
@@ -46,5 +46,33 @@ Check '記録が壊れていても、0 回として扱う'   ((& $Pwm { (Get-PwU
 [void](Try-Unlock 'wrong-secret-xyz')
 $audit = Get-Content -LiteralPath (Join-Path $env:APPDATA 'PwManager\audit.log') -Raw -Encoding UTF8
 Check '失敗を監査ログに残す（入力した値は書かない）' ($audit -match 'UNLOCK-FAIL' -and $audit -notmatch 'wrong-secret-xyz' -and $audit -notmatch 'right-password')
+Check '違うときは「マスターパスワードが違います」' ((Try-Unlock 'wrong') -match 'マスターパスワードが違います')
+[void](Try-Unlock 'right-password')
+$keyFile = Join-Path $env:APPDATA 'PwManager\vaultkey.json'
+Rename-Item -LiteralPath $keyFile -NewName 'vaultkey.bak'
+$msg = Try-Unlock 'right-password'
+Rename-Item -LiteralPath (Join-Path $env:APPDATA 'PwManager\vaultkey.bak') -NewName 'vaultkey.json'
+Check 'キーのファイルが無いときは理由を示し、失敗の回数には数えない' ($msg -match '保管庫キーのファイルがありません' -and (& $Pwm { (Get-PwUnlockFailures).Count }) -eq 0)
+
+Write-Host 'コマンドから使うとき（ロックされていれば尋ねて開く）'
+$global:Locked = $true
+function global:Get-SecretInfo { param($Vault, $Name) if ($global:Locked) { throw 'A valid password is required to access the Microsoft.PowerShell.SecretStore vault. Use the Unlock-SecretStore cmdlet.' } }
+$global:Answers = [System.Collections.Queue]::new(@('wrong-1', 'right-password'))
+function global:Read-Host { param($Prompt, [switch]$AsSecureString) S $global:Answers.Dequeue() }
+$global:OrigUnlock = (Get-Command Unlock-SecretStore).ScriptBlock
+function global:Unlock-SecretStore { param([securestring]$Password, $PasswordTimeout) & $global:OrigUnlock -Password $Password; $global:Locked = $false }
+$err = $null
+try { [void](Get-PwEntry 3>$null) } catch { $err = $_ }
+Check '間違えても尋ね直し、正しいマスターパスワードで開いて続ける' ($null -eq $err -and -not $global:Locked -and $global:Answers.Count -eq 0)
+$global:Locked = $true
+$global:Answers = [System.Collections.Queue]::new(@('wrong-1', 'wrong-2', 'wrong-3', 'right-password'))
+$err = $null
+try { [void](Get-PwEntry 3>$null) } catch { $err = $_ }
+Check '3 回続けて違えば止まる'                ($null -ne $err -and $global:Answers.Count -eq 1)
+$global:Locked = $true
+$err = $null
+try { & $Pwm { $script:PinnedConfig = Get-PwConfig; try { Get-PwEntry } finally { $script:PinnedConfig = $null } } } catch { $err = $_ }
+Check '画面の表示中は尋ねない（画面側で解除の画面を出す）' ($null -ne $err -and $global:Answers.Count -eq 1)
+Remove-Item Function:\global:Read-Host
 
 Complete-Test

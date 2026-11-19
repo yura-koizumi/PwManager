@@ -1,0 +1,240 @@
+﻿# Key.ps1 - 保管庫キー（マスターパスワード・回復キー・Windows ユーザーへの結び付け）
+# （PwManager.psm1 から読み込まれる）
+<#
+  SecretStore は、ランダムな保管庫キー（32 バイト）をパスワードとして暗号化する。保管庫キーは次の 2 通りで包んで保存する。
+
+    この PC 用  : マスターパスワード（PBKDF2）で包み、さらに Windows のユーザーに結び付けて（DPAPI）包む
+                  → ファイルを持ち出されても、別の PC・別のユーザーでは総当たりを始められない
+    回復用      : 回復キー（ランダム 160 ビット）で包む。バックアップの ZIP にはこれを入れる
+                  → バックアップはマスターパスワードの強さに関係なく、総当たりでは破れない
+
+  包む処理は AES-256-CBC + HMAC-SHA256（暗号化してから改ざん検知の値を付ける）。
+  マスターパスワードや回復キーが違えば、改ざん検知の値が合わないので分かる。
+#>
+
+$script:KeyPath       = Join-Path $script:DataDir 'vaultkey.json'
+$script:KdfIterations = 100000    # PBKDF2-SHA256 の回数（約 0.5 秒）。外側を DPAPI で包むので、この回数で十分
+$script:DpapiEntropy  = [Text.Encoding]::UTF8.GetBytes('PwManager.VaultKey.v1')
+$script:Base32        = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'   # 回復キーの文字（Crockford Base32: I L O U は使わない）
+Add-Type -AssemblyName System.Security   # ProtectedData（DPAPI）。.NET 標準のアセンブリを読み込むだけ
+
+function New-PwRandomBytes([int]$Count) {
+    $b = New-Object byte[] $Count
+    $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($b) } finally { $rng.Dispose() }
+    , $b
+}
+
+function Clear-PwBytes { foreach ($b in $args) { if ($b) { [Array]::Clear($b, 0, $b.Length) } } }
+
+function Get-PwSecureChars([securestring]$Secure) {
+    # SecureString の中身を char[] で取り出す（文字列を作らない。使い終わったら Clear-PwBytes で消す）
+    $c = New-Object char[] $Secure.Length
+    $p = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
+    try { [Runtime.InteropServices.Marshal]::Copy($p, $c, 0, $c.Length) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($p) }
+    , $c
+}
+
+function Get-PwHmac([byte[]]$Key, [byte[]]$Data) {
+    $h = New-Object Security.Cryptography.HMACSHA256 (, $Key)
+    try { , $h.ComputeHash($Data) } finally { $h.Dispose() }
+}
+
+function Split-PwKey([byte[]]$Master) {
+    # 1 つの鍵から、暗号化用と改ざん検知用の鍵を作り分ける
+    @{ Enc = (Get-PwHmac $Master ([Text.Encoding]::ASCII.GetBytes('enc'))); Mac = (Get-PwHmac $Master ([Text.Encoding]::ASCII.GetBytes('mac'))) }
+}
+
+function Protect-PwBytes([byte[]]$Key, [byte[]]$Data) {
+    $k = Split-PwKey $Key
+    $aes = [Security.Cryptography.Aes]::Create()
+    try {
+        $aes.Key = $k.Enc; $aes.GenerateIV()
+        $enc = $aes.CreateEncryptor().TransformFinalBlock($Data, 0, $Data.Length)
+        $body = [byte[]]($aes.IV + $enc)
+        , [byte[]]($body + (Get-PwHmac $k.Mac $body))
+    } finally { $aes.Dispose(); Clear-PwBytes $k.Enc $k.Mac }
+}
+
+function Unprotect-PwBytes([byte[]]$Key, [byte[]]$Blob) {
+    # 鍵が違う・壊れているときは $null
+    if ($Blob.Length -lt 64) { return $null }
+    $k = Split-PwKey $Key
+    $aes = [Security.Cryptography.Aes]::Create()
+    try {
+        $body = [byte[]]$Blob[0..($Blob.Length - 33)]
+        $mac = Get-PwHmac $k.Mac $body
+        $diff = 0
+        for ($i = 0; $i -lt 32; $i++) { $diff = $diff -bor ($mac[$i] -bxor $Blob[$Blob.Length - 32 + $i]) }   # 比べる時間を一定にする
+        if ($diff -ne 0) { return $null }
+        $aes.Key = $k.Enc; $aes.IV = [byte[]]$body[0..15]
+        , $aes.CreateDecryptor().TransformFinalBlock($body, 16, $body.Length - 16)
+    } finally { $aes.Dispose(); Clear-PwBytes $k.Enc $k.Mac }
+}
+
+function Get-PwPasswordKey([securestring]$Password, [byte[]]$Salt, [int]$Iterations) {
+    $c = Get-PwSecureChars $Password
+    $b = [Text.Encoding]::UTF8.GetBytes($c)
+    try {
+        $kdf = New-Object Security.Cryptography.Rfc2898DeriveBytes($b, $Salt, $Iterations, [Security.Cryptography.HashAlgorithmName]::SHA256)
+        try { , $kdf.GetBytes(32) } finally { $kdf.Dispose() }
+    } finally { Clear-PwBytes $c $b }
+}
+
+#region 回復キー
+
+function ConvertTo-PwRecoveryText([byte[]]$Bytes) {
+    # 20 バイト → 32 文字（4 文字ずつ - で区切る）
+    $sb = New-Object Text.StringBuilder
+    $acc = 0; $bits = 0
+    foreach ($x in $Bytes) {
+        $acc = (($acc -shl 8) -bor $x) -band 0xFFFF; $bits += 8
+        while ($bits -ge 5) { $bits -= 5; [void]$sb.Append($script:Base32[($acc -shr $bits) -band 31]) }
+    }
+    ($sb.ToString() -split '(.{4})' | Where-Object { $_ }) -join '-'
+}
+
+function ConvertFrom-PwRecoveryKey([securestring]$Key) {
+    # 入力された回復キーを 20 バイトに戻す。区切りや空白・小文字は無視し、O→0・I/L→1 と読み替える。形式が違えば $null
+    $c = Get-PwSecureChars $Key
+    $out = New-Object byte[] 20
+    try {
+        $n = 0; $acc = 0; $bits = 0
+        foreach ($ch in $c) {
+            $u = [char]::ToUpperInvariant($ch)
+            if ($u -eq '-' -or [char]::IsWhiteSpace($u)) { continue }
+            if ($u -eq 'O') { $u = '0' } elseif ($u -eq 'I' -or $u -eq 'L') { $u = '1' }
+            $v = $script:Base32.IndexOf($u)
+            if ($v -lt 0 -or $n -ge 20) { return $null }
+            $acc = (($acc -shl 5) -bor $v) -band 0xFFFF; $bits += 5
+            if ($bits -ge 8) { $bits -= 8; $out[$n] = ($acc -shr $bits) -band 0xFF; $n++ }
+        }
+        if ($n -ne 20) { return $null }
+        , $out
+    } finally { Clear-PwBytes $c }
+}
+
+function Protect-PwRecovery([byte[]]$VaultKey, [byte[]]$RecoveryBytes) {
+    $salt = New-PwRandomBytes 16
+    $k = Get-PwHmac $RecoveryBytes $salt    # 回復キーは十分ランダムなので、時間のかかる処理は要らない
+    try { [pscustomobject]@{ Salt = [Convert]::ToBase64String($salt); Data = [Convert]::ToBase64String((Protect-PwBytes $k $VaultKey)) } }
+    finally { Clear-PwBytes $k }
+}
+
+function Unprotect-PwRecovery($Recovery, [securestring]$RecoveryKey) {
+    # 回復キーで保管庫キーを取り出す。回復キーが違えば例外
+    $r = ConvertFrom-PwRecoveryKey $RecoveryKey
+    if (-not $r) { throw '回復キーの形式が違います（4 文字ずつ 8 組、32 文字）。' }
+    $k = Get-PwHmac $r ([Convert]::FromBase64String($Recovery.Salt))
+    try { $v = Unprotect-PwBytes $k ([Convert]::FromBase64String($Recovery.Data)) }
+    finally { Clear-PwBytes $r $k }
+    if (-not $v) { throw '回復キーが違います。' }
+    , $v
+}
+
+#endregion
+
+#region 保管庫キーのファイル（%APPDATA%\PwManager\vaultkey.json）
+
+function Read-PwKeyFile {
+    if (-not (Test-Path -LiteralPath $script:KeyPath)) {
+        throw "保管庫キーのファイルがありません: $($script:KeyPath)`nバックアップがあれば Restore-PwVault で復元してください。"
+    }
+    Read-PwJson $script:KeyPath
+}
+
+function Write-PwKeyFile([byte[]]$VaultKey, [securestring]$MasterPassword, $Recovery) {
+    # この PC 用の包み（マスターパスワード + Windows ユーザー）を作り直して保存する。回復用はそのまま引き継ぐ
+    $salt = New-PwRandomBytes 16
+    $pk = Get-PwPasswordKey $MasterPassword $salt $script:KdfIterations
+    try {
+        $inner = Protect-PwBytes $pk $VaultKey
+        $device = [Security.Cryptography.ProtectedData]::Protect($inner, $script:DpapiEntropy, 'CurrentUser')
+    } finally { Clear-PwBytes $pk }
+    $j = [ordered]@{
+        Version    = 1
+        Iterations = $script:KdfIterations
+        Salt       = [Convert]::ToBase64String($salt)
+        Device     = [Convert]::ToBase64String($device)
+        Recovery   = $Recovery
+    }
+    Initialize-PwDataDir
+    $tmp = "$($script:KeyPath).tmp"
+    $j | ConvertTo-Json | Set-Content -LiteralPath $tmp -Encoding UTF8
+    Move-Item -LiteralPath $tmp -Destination $script:KeyPath -Force   # 書きかけのファイルを残さない
+}
+
+function Get-PwVaultKey([securestring]$MasterPassword) {
+    # マスターパスワードで保管庫キー（byte[]）を取り出す。違えば例外（メッセージに「マスターパスワードが違います」）
+    $j = Read-PwKeyFile
+    try { $inner = [Security.Cryptography.ProtectedData]::Unprotect([Convert]::FromBase64String($j.Device), $script:DpapiEntropy, 'CurrentUser') }
+    catch { throw "この Windows ユーザーでは保管庫を開けません（別の PC やユーザーで作られた保管庫です）。`nバックアップと回復キーで復元してください（Restore-PwVault）。" }
+    $pk = Get-PwPasswordKey $MasterPassword ([Convert]::FromBase64String($j.Salt)) ([int]$j.Iterations)
+    try { $v = Unprotect-PwBytes $pk $inner } finally { Clear-PwBytes $pk $inner }
+    if (-not $v) { throw [Security.Authentication.InvalidCredentialException]::new('マスターパスワードが違います。') }
+    , $v
+}
+
+function ConvertTo-PwStorePassword([byte[]]$VaultKey) {
+    # SecretStore に渡すパスワード（保管庫キーの Base64）。文字列を作らずに SecureString にする
+    $c = New-Object char[] 44
+    [void][Convert]::ToBase64CharArray($VaultKey, 0, $VaultKey.Length, $c, 0)
+    $s = New-Object System.Security.SecureString
+    try { foreach ($ch in $c) { $s.AppendChar($ch) } } finally { Clear-PwBytes $c }
+    $s.MakeReadOnly()
+    $s
+}
+
+function New-PwVaultKeySet([securestring]$MasterPassword) {
+    # 新しい保管庫キーと回復キーを作り、キーのファイルを保存する。@{ StorePassword; RecoveryKey（表示用の文字列） } を返す
+    $vk = New-PwRandomBytes 32
+    $rb = New-PwRandomBytes 20
+    try {
+        Write-PwKeyFile $vk $MasterPassword (Protect-PwRecovery $vk $rb)
+        @{ StorePassword = (ConvertTo-PwStorePassword $vk); RecoveryKey = (ConvertTo-PwRecoveryText $rb) }
+    } finally { Clear-PwBytes $vk $rb }
+}
+
+function Show-PwRecoveryKey([string]$Text) {
+    Write-Host ''
+    Write-Host '  回復キー（バックアップから戻すときと、マスターパスワードを忘れたときに使います）' -ForegroundColor Yellow
+    Write-Host ''
+    Write-Host "      $Text" -ForegroundColor White
+    Write-Host ''
+    Write-Host '  紙などに控えて、バックアップとは別の場所に保管してください。この画面を閉じると、二度と表示できません。'
+    [void](Read-Host '  控えたら Enter')
+}
+
+function New-PwRecoveryKey {
+    <#
+    .SYNOPSIS
+      保管庫キーと回復キーを作り直す（回復キーが漏れた心配があるとき）。
+    .DESCRIPTION
+      保管庫を新しい保管庫キーで暗号化し直し、新しい回復キーを表示する。
+      それまでのバックアップは古い回復キーで開けるので、不要なら削除して取り直すこと。
+      PwManager の画面を閉じてから実行する。
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param([securestring]$MasterPassword)
+    Assert-PwGuiClosed
+    if (-not $MasterPassword) { $MasterPassword = Read-Host 'マスターパスワード' -AsSecureString }
+    $old = Get-PwVaultKey $MasterPassword
+    if (-not $PSCmdlet.ShouldProcess('保管庫キーと回復キー', '作り直し')) { Clear-PwBytes $old; return }
+    $oldPw = ConvertTo-PwStorePassword $old
+    $oldFile = Get-Content -LiteralPath $script:KeyPath -Raw -Encoding UTF8
+    $safety = Save-PwVaultSafetyCopy 'pre-rekey'   # 途中で失敗したときのため（成功したら消す）
+    try {
+        $set = New-PwVaultKeySet $MasterPassword
+        Set-SecretStorePassword -Password $oldPw -NewPassword $set.StorePassword
+    } catch {
+        Set-Content -LiteralPath $script:KeyPath -Value $oldFile -Encoding UTF8 -NoNewline
+        throw "作り直せませんでした（保管庫はそのままです）。退避ファイル: $safety`n$($_.Exception.Message)"
+    } finally { Clear-PwBytes $old }
+    Unlock-PwVault $set.StorePassword
+    if ($safety) { Remove-Item -LiteralPath $safety -Force -ErrorAction SilentlyContinue }
+    Write-PwAudit 'REKEY' '保管庫キーと回復キーを作り直し'
+    Show-PwRecoveryKey $set.RecoveryKey
+}
+
+#endregion

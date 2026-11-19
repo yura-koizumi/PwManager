@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'PwManager.psm1'
-    ModuleVersion     = '1.4.0'
+    ModuleVersion     = '0.5.0'
     GUID              = '67758978-7d08-419a-a448-af502dfd98f4'
     Author            = 'yura'
     Description       = 'SecretManagement / SecretStore を使ったローカルパスワード管理ツール'
@@ -21,8 +21,10 @@
         'Initialize-PwManager'
         'Install-PwShortcut'
         'Set-PwMasterPassword'
+        'New-PwRecoveryKey'
     )
     CmdletsToExport   = @()
     VariablesToExport = @()
     AliasesToExport   = @('pwm')
+    PrivateData       = @{ PSData = @{ Prerelease = 'beta' } }   # 正式リリースまではベータ
 }

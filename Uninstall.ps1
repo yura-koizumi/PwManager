@@ -30,6 +30,14 @@ if (Test-Path -LiteralPath $configPath) {
     } catch { }
 }
 
+# 保管庫の中身を確かめるときに使うので、プログラムを消す前に読み込んでおく（このフォルダーのもの、なければインストール済みのもの）
+$pwm = $null
+foreach ($psd in (Join-Path $PSScriptRoot 'PwManager\PwManager.psd1'), (Join-Path $moduleDir 'PwManager.psd1')) {
+    if (Test-Path -LiteralPath $psd) {
+        try { $pwm = Import-Module $psd -Force -PassThru -ErrorAction Stop; break } catch { }
+    }
+}
+
 $m = $null
 if ([System.Threading.Mutex]::TryOpenExisting('Local\PwManager-GUI', [ref]$m)) {
     $m.Dispose()
@@ -78,9 +86,11 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
             if (Test-Path -LiteralPath $storeDir) {
                 Write-Host ''
                 $pw = Read-Host 'マスターパスワード（ほかの用途のシークレットが無いか確かめます。分からなければ空欄のまま Enter）' -AsSecureString
-                if ($pw.Length -gt 0) {
+                if ($pw.Length -gt 0 -and -not $pwm) {
+                    $warnings.Add('PwManager のプログラムが見つからないため、保管庫の中身は確かめていません。')
+                } elseif ($pw.Length -gt 0) {
                     try {
-                        Unlock-SecretStore -Password $pw
+                        & $pwm { param($p) [void](Invoke-PwUnlock $p) } $pw   # 保管庫キーはマスターパスワードから取り出す
                         $infos = @(Get-SecretInfo -Vault $vaultName)
                         $mine = @($infos | Where-Object { $_.Name -like 'pwm:*' }).Count
                         $other = $infos.Count - $mine
@@ -98,7 +108,7 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
         Write-Host ''
         Write-Host '次のものを削除します。' -ForegroundColor Yellow
         if (Test-Path -LiteralPath $storeDir) { Write-Host "  保管庫（暗号化されたデータ）: $storeDir" }
-        if (Test-Path -LiteralPath $dataDir)  { Write-Host "  設定・監査ログ・退避ファイル: $dataDir" }
+        if (Test-Path -LiteralPath $dataDir)  { Write-Host "  設定・保管庫キー・監査ログ・退避ファイル: $dataDir" }
         foreach ($w in $warnings) { Write-Warning $w }
         Write-Host '  ※ 手で取ったバックアップ（ZIP）は削除しません。不要なら手で削除してください。'
         $confirm = Read-Host '本当に削除するときは DELETE と入力してください（それ以外は中止してデータを残します）'

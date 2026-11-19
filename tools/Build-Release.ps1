@@ -21,7 +21,8 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$ver = (Import-PowerShellDataFile (Join-Path $root 'PwManager\PwManager.psd1')).ModuleVersion
+$psd = Import-PowerShellDataFile (Join-Path $root 'PwManager\PwManager.psd1')
+$ver = $psd.ModuleVersion + $(if ($psd.PrivateData.PSData.Prerelease) { '-' + $psd.PrivateData.PSData.Prerelease })
 Write-Host "=== PwManager v$ver のリリースを作ります ===" -ForegroundColor Cyan
 
 if (-not $SkipTests) {

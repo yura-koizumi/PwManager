@@ -13,6 +13,10 @@ function Initialize-PwManager {
     Register-PwVaultIfMissing $cfg
 
     if (Test-Path -LiteralPath (Join-Path $script:StoreRoot 'localstore')) {
+        if (-not (Test-Path -LiteralPath $script:KeyPath)) {
+            throw ("保管庫はありますが、保管庫キーのファイルがありません: $($script:KeyPath)`n" +
+                   'バックアップがあれば Restore-PwVault で復元してください。以前のベータ版で作った保管庫なら、Uninstall.bat でデータを削除してから、もう一度インストールしてください。')
+        }
         Write-Host '既存の保管庫を使います（マスターパスワードはこれまでと同じです）。'
         return
     }
@@ -20,11 +24,18 @@ function Initialize-PwManager {
     Write-Host ''
     Write-Host 'マスターパスワードを設定します。' -ForegroundColor Cyan
     Write-Host "  ・$($script:MasterPasswordMinLength) 文字以上、ほかで使っていないもの（長めのフレーズがおすすめ）"
-    Write-Host '  ・忘れると、保存したパスワードは二度と取り出せません'
     $p1 = Read-PwNewMasterPassword
-    Set-SecretStoreConfiguration -Scope CurrentUser -Authentication Password -Interaction Prompt `
-        -PasswordTimeout 900 -Password $p1 -Confirm:$false
+    $set = New-PwVaultKeySet $p1
+    try {
+        # ロックされているときに SecretStore 自身がパスワードを尋ねないようにする（尋ねるのは PwManager。保管庫キーは人が入力しない）
+        Set-SecretStoreConfiguration -Scope CurrentUser -Authentication Password -Interaction None `
+            -PasswordTimeout 900 -Password $set.StorePassword -Confirm:$false
+    } catch {
+        Remove-Item -LiteralPath $script:KeyPath -Force -ErrorAction SilentlyContinue
+        throw
+    }
     Write-Host '保管庫を作成しました。' -ForegroundColor Green
+    Show-PwRecoveryKey $set.RecoveryKey
 }
 
 function Install-PwShortcut {
