@@ -94,6 +94,7 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
                         & $pwm { param($p) [void](Invoke-PwUnlock $p) } $pw   # 保管庫キーはマスターパスワードから取り出す
                         $infos = @(Get-SecretInfo -Vault $vaultName)
                         $mine = @($infos | Where-Object { $_.Name -like 'pwm:*' }).Count
+                        $infos = @($infos | Where-Object { $_.Name -notlike 'pwm-prev:*' })   # 変更前のパスワード（PwManager のもの）は数えない
                         $other = $infos.Count - $mine
                         Write-Host "  PwManager のエントリ: $mine 件"
                         if ($other -gt 0) { $warnings.Add("PwManager 以外のシークレットが $other 件あります（これも消えます）。") }

@@ -130,6 +130,7 @@ function Show-PwManager {
             $item.Add_Click({ param($s) Invoke-PwUi $ui { Open-PwUiUrl $ui $s.Tag } })
         }
         [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+        & $addItem $menu '変更前のパスワードをコピー' '' { Copy-PwUiPreviousPassword $ui }
         & $addItem $menu '編集...' 'F2' { Edit-PwUiEntry $ui }
         & $addItem $menu '削除...' 'Del' { Remove-PwUiEntry $ui }
 

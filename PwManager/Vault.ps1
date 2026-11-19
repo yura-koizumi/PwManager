@@ -226,6 +226,35 @@ function Get-PwPassword([string]$Name) {
     Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $Name -AsPlainText }
 }
 
+#region 変更前のパスワード
+# パスワードを変えたとき、変更前のものを 1 つだけ別のシークレット（pwm-prev:<ID>）に残す。
+# 新しいパスワードが相手のサイトで通らなかったときなどに戻せるようにするため。一覧（pwm:*）には出ない。
+
+$script:PreviousPrefix = 'pwm-prev:'
+
+function Get-PwPreviousName([string]$Name) { $script:PreviousPrefix + $Name.Substring($script:SecretPrefix.Length) }
+
+function Get-PwPreviousPassword([string]$Name) {
+    # 変更前のパスワード @{ Text = 平文; Replaced = 変えた日時（文字列） } を返す（無ければ $null）
+    $cfg = Get-PwConfig
+    $prev = Get-PwPreviousName $Name
+    $info = @(Get-PwSecretInfo $prev)
+    if ($info.Count -eq 0) { return $null }
+    $m = $info[0].Metadata
+    @{ Text = (Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $prev -AsPlainText })
+       Replaced = $(if ($m -and $m.ContainsKey('Replaced')) { [string]$m['Replaced'] } else { '' }) }
+}
+
+function Save-PwPreviousPassword([string]$Name, [securestring]$New, [string]$Now) {
+    # パスワードを $New に変える前に、今のものを残す（同じパスワードを入れ直したときは何もしない）
+    $cfg = Get-PwConfig
+    $cur = Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $Name }
+    if (-not $cur -or (Test-PwSecureStringEqual $cur $New)) { return }
+    Use-PwVault { Set-Secret -Vault $cfg.VaultName -Name (Get-PwPreviousName $Name) -Secret $cur -Metadata @{ Replaced = $Now } }
+}
+
+#endregion
+
 function Save-PwEntry {
     <# 新規(-Name なし)または更新。-Password を省略した更新では、パスワードは変更しない。 #>
     param(
@@ -264,6 +293,7 @@ function Save-PwEntry {
     }
 
     $pwChanged = $Password -and $Password.Length -gt 0
+    if ($pwChanged -and -not $isNew) { Save-PwPreviousPassword $Name $Password $now }   # 先に残す（新しい方の保存に失敗しても、残るのは今のもの）
     Use-PwVault {
         if ($pwChanged) { Set-Secret -Vault $cfg.VaultName -Name $Name -Secret $Password -Metadata $meta }
         else { Set-SecretInfo -Vault $cfg.VaultName -Name $Name -Metadata $meta }
@@ -307,6 +337,8 @@ function Remove-PwEntry {
         $title = if ($m -and $m.ContainsKey('Title')) { [string]$m['Title'] } else { $Name }
         if ($PSCmdlet.ShouldProcess($title, '削除')) {
             Remove-Secret -Vault $cfg.VaultName -Name $Name
+            $prev = Get-PwPreviousName $Name
+            if (@(Get-PwSecretInfo $prev).Count) { Remove-Secret -Vault $cfg.VaultName -Name $prev }   # 変更前のパスワードも消す
             Write-PwAudit 'DELETE' "[$Name]"
         }
     }

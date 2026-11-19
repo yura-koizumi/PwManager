@@ -20,6 +20,13 @@ function Copy-PwUiPassword($ui) {
     Set-PwUiClipboard $ui $text $true "「$($e.Title)」のパスワード"
 }
 
+function Copy-PwUiPreviousPassword($ui) {
+    $e = Get-PwUiSelected $ui; if (-not $e) { return }
+    $p = Invoke-PwVault $ui { Get-PwPreviousPassword $e.Name }
+    if (-not $p) { Set-PwUiStatus $ui "「$($e.Title)」には変更前のパスワードがありません。" -Warn; return }
+    Set-PwUiClipboard $ui $p.Text $true "「$($e.Title)」の変更前のパスワード（$($p.Replaced) まで使用）"
+}
+
 function Copy-PwUiField($ui, $Field) {
     $e = Get-PwUiSelected $ui; if (-not $e) { return }
     $v = [string]$e.($Field.Name)

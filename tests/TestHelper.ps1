@@ -17,7 +17,8 @@ function global:Set-Secret     { param($Vault, $Name, $Secret, $Metadata) $globa
 function global:Remove-Secret  { param($Vault, $Name) $global:Store.Remove($Name) }
 function global:Get-Secret {
     param($Vault, $Name, [switch]$AsPlainText)
-    [pscredential]::new('x', $global:Store[$Name].Secret).GetNetworkCredential().Password
+    $s = $global:Store[$Name].Secret
+    if ($AsPlainText) { [pscredential]::new('x', $s).GetNetworkCredential().Password } else { $s }
 }
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing

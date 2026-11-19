@@ -86,6 +86,10 @@ function Copy-PwField {
       対象の検索語（Get-PwEntry と同じ）。タイトルが完全に一致すればそれ、候補が複数なら選ぶ画面が出る。
     .PARAMETER Field
       コピーする項目（Name でも Label でもよい）。省略するとパスワード。
+    .PARAMETER Previous
+      変更前のパスワードをコピーする（パスワードを変えたとき、1 つ前のものだけ残している）。
+    .EXAMPLE
+      Copy-PwField 社内ポータル -Previous  # 変更前のパスワードをコピー
     .EXAMPLE
       Copy-PwField 社内ポータル            # パスワードをコピー
       Copy-PwField 社内ポータル Id         # ID をコピー
@@ -93,13 +97,18 @@ function Copy-PwField {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory, Position = 0)][string]$Query,
-        [Parameter(Position = 1)][string]$Field = 'Password'
+        [Parameter(Position = 1)][string]$Field = 'Password',
+        [switch]$Previous
     )
     $cfg = Get-PwConfig
     $entry = Resolve-PwEntry $Query
     if (-not $entry) { return }
 
-    if ($Field -in 'Password', 'PW', 'パスワード') {
+    if ($Previous) {
+        $p = Get-PwPreviousPassword $entry.Name
+        if (-not $p) { Write-Warning "「$($entry.Title)」には変更前のパスワードがありません。"; return }
+        $text = $p.Text; $sensitive = $true; $label = "変更前のパスワード（$($p.Replaced) まで使用）"
+    } elseif ($Field -in 'Password', 'PW', 'パスワード') {
         $text = Get-PwPassword $entry.Name; $sensitive = $true; $label = 'パスワード'
     } else {
         $def = @($cfg.Fields | Where-Object { $_.Name -eq $Field -or $_.Label -eq $Field }) | Select-Object -First 1
