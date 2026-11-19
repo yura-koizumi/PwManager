@@ -209,8 +209,18 @@ PwManager\                 … 配布用フォルダー
   tests\                   … 自動テスト（配布・インストールの対象外）
   PwManager\               … 本体（Documents\WindowsPowerShell\Modules\PwManager にコピーされる）
     PwManager.psd1         … バージョン情報（更新するときは ModuleVersion を上げる）
-    PwManager.psm1         … 保管庫の操作、バックアップ、CSV、コマンド
-    Gui.ps1                … 画面
+    PwManager.psm1         … 共通の定数と、下の各ファイルの読み込み
+    Config.ps1             … 設定・状態・監査ログ
+    Vault.ps1              … 保管庫の操作（登録・更新・削除・一覧）
+    Clipboard.ps1          … クリップボード（コピー・自動消去）
+    Password.ps1           … パスワード生成
+    Backup.ps1             … バックアップ・復元
+    Csv.ps1                … CSV の取り込み・書き出し
+    Setup.ps1              … 初期設定とショートカット
+    Gui.Dialogs.ps1        … 画面の共通部品とダイアログ（ロック解除・登録/編集）
+    Gui.List.ps1           … 一覧の作成・絞り込み・1 行単位の更新
+    Gui.Actions.ps1        … 画面の操作（コピー・登録・編集・削除・バックアップ・ロック）
+    Gui.Main.ps1           … メイン画面
     Launch.ps1             … ショートカットから呼び出される起動スクリプト
     config.default.json    … 設定の既定値
 
