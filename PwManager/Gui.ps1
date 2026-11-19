@@ -40,6 +40,20 @@ function Invoke-PwVault($ui, [scriptblock]$Action) {
     }
 }
 
+function Register-PwActivity($ui, $Form) {
+    # 画面（子コントロールを含む）でのキー入力・クリックを「操作あり」として自動ロックの判定に使う
+    $touch = { $ui.LastActivity = Get-Date }.GetNewClosure()
+    $Form.KeyPreview = $true
+    $Form.Add_KeyDown($touch)
+    $stack = New-Object System.Collections.Stack
+    $stack.Push($Form)
+    while ($stack.Count -gt 0) {
+        $c = $stack.Pop()
+        $c.Add_MouseDown($touch)
+        foreach ($child in $c.Controls) { $stack.Push($child) }
+    }
+}
+
 function Set-PwUiStatus($ui, [string]$Text, [switch]$Warn) {
     $ui.Status.Text = $Text
     $ui.Status.ForeColor = if ($Warn) { [System.Drawing.Color]::DarkOrange } else { [System.Drawing.SystemColors]::ControlText }
@@ -53,6 +67,7 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
     $dlg = New-PwControl Form @{
         Text = 'PwManager - ロック解除'; FormBorderStyle = 'FixedDialog'; MaximizeBox = $false; MinimizeBox = $false
         Font = $ui.Font; AutoSize = $true; AutoSizeMode = 'GrowAndShrink'; Padding = (New-PwPadding 12); TopMost = $true
+        Tag = 'PwUnlock'   # 自動ロックの判定で、この画面は閉じない
     }
     $layout  = New-PwControl TableLayoutPanel @{ ColumnCount = 1; AutoSize = $true; Dock = 'Fill' }
     $msg     = New-PwControl Label @{ Text = $Message; AutoSize = $true; MaximumSize = (New-PwSize 380 0); Margin = (New-PwPadding 3 3 3 8) }
@@ -175,6 +190,7 @@ function Show-PwEditDialog($ui, $Entry) {
         }
     })
     $dlg.Add_Shown({ [void]$title.Focus() })
+    Register-PwActivity $ui $dlg
 
     [void]$dlg.ShowDialog($ui.Form)
     $dlg.Dispose()
@@ -359,6 +375,20 @@ function Lock-PwUi($ui) {
     }
 }
 
+function Invoke-PwUiAutoLock($ui) {
+    # 無操作が続いたらロックする。編集などの子画面が開いていれば、内容が画面に残らないよう先に閉じる
+    $lockMin = [double]$ui.Cfg.AutoLockMinutes
+    if ($lockMin -le 0 -or $ui.Locking -or ((Get-Date) - $ui.LastActivity).TotalMinutes -lt $lockMin) { return }
+    $others = @([System.Windows.Forms.Application]::OpenForms | Where-Object { $_ -ne $ui.Form })
+    if (@($others | Where-Object { $_.Tag -eq 'PwUnlock' }).Count -gt 0) { return }  # すでにマスターパスワードを求めている
+    if ($others.Count -gt 0) {
+        # 子画面のモーダル処理が終わってからロックする（次のタイマーで再判定）
+        foreach ($f in $others) { $f.Close() }
+        return
+    }
+    Lock-PwUi $ui
+}
+
 #endregion
 
 #region メイン画面 -----------------------------------------------------------------
@@ -479,6 +509,7 @@ function Show-PwManager {
         # Dock は後から追加したものほど外側になる
         $form.Controls.AddRange([System.Windows.Forms.Control[]]@($grid, $copyBar, $top, $statusStrip))
         $ui.Panels = @($top, $copyBar, $grid)
+        Register-PwActivity $ui $form
 
         # ---- イベント ----
         $search.Add_TextChanged({ $ui.LastActivity = Get-Date; Update-PwGrid $ui })
@@ -552,10 +583,7 @@ function Show-PwManager {
                     $ui.ClipLabel.Text = "クリップボード消去まで $left 秒"
                 }
             }
-            $lockMin = [double]$ui.Cfg.AutoLockMinutes
-            if ($lockMin -gt 0 -and -not $ui.Locking -and ((Get-Date) - $ui.LastActivity).TotalMinutes -ge $lockMin) {
-                Invoke-PwUi $ui { Lock-PwUi $ui }
-            }
+            Invoke-PwUi $ui { Invoke-PwUiAutoLock $ui }
         })
 
         $form.Add_Shown({
