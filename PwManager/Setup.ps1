@@ -19,18 +19,9 @@ function Initialize-PwManager {
 
     Write-Host ''
     Write-Host 'マスターパスワードを設定します。' -ForegroundColor Cyan
-    Write-Host '  ・12 文字以上、ほかで使っていないもの（長めのフレーズがおすすめ）'
+    Write-Host "  ・$($script:MasterPasswordMinLength) 文字以上、ほかで使っていないもの（長めのフレーズがおすすめ）"
     Write-Host '  ・忘れると、保存したパスワードは二度と取り出せません'
-    while ($true) {
-        $p1 = Read-Host 'マスターパスワード' -AsSecureString
-        $p2 = Read-Host '確認のためもう一度' -AsSecureString
-        $a = ConvertFrom-PwSecureString $p1; $b = ConvertFrom-PwSecureString $p2
-        $match = ($a -ceq $b); $len = $a.Length
-        $a = $null; $b = $null
-        if (-not $match) { Write-Warning '一致しません。もう一度入力してください。'; continue }
-        if ($len -lt 12) { Write-Warning '12 文字以上にしてください。'; continue }
-        break
-    }
+    $p1 = Read-PwNewMasterPassword
     Set-SecretStoreConfiguration -Scope CurrentUser -Authentication Password -Interaction Prompt `
         -PasswordTimeout 900 -Password $p1 -Confirm:$false
     Write-Host '保管庫を作成しました。' -ForegroundColor Green

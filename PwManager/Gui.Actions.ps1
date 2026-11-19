@@ -97,6 +97,18 @@ function Invoke-PwUiStartupBackup($ui) {
     }
 }
 
+function Invoke-PwUiChangePassword($ui) {
+    $r = Show-PwChangePasswordDialog $ui
+    if (-not $r) { return }
+    $ui.UnlockedAt = Get-Date   # 新しいパスワードでロック解除済み
+    $lines = @('マスターパスワードを変更しました。次回からは新しいパスワードで開きます。', '')
+    if ($r.SafetyCopy) { $lines += "変更前の保管庫: $($r.SafetyCopy)`n（変更前のパスワードで開けます。不要になったら削除して構いません）" }
+    $lines += if ($r.Backup) { "新しいパスワードでバックアップしました: $($r.Backup)" }
+              else { 'バックアップ先（BackupFolder）が未設定のため、変更後のバックアップは取っていません。「バックアップ」を押してください。' }
+    Show-PwMessage ($lines -join "`n")
+    Set-PwUiStatus $ui 'マスターパスワードを変更しました。'
+}
+
 function Lock-PwUi($ui) {
     if ($ui.Locking) { return }
     $ui.Locking = $true

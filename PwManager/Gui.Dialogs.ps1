@@ -106,6 +106,69 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
     $state.Ok
 }
 
+function Show-PwChangePasswordDialog($ui) {
+    # マスターパスワードを変更する。変更したら Set-PwMasterPassword の結果を、キャンセルなら $null を返す
+    $dlg = New-PwControl Form @{
+        Text = 'マスターパスワードの変更'; FormBorderStyle = 'FixedDialog'; MaximizeBox = $false; MinimizeBox = $false
+        ShowInTaskbar = $false; StartPosition = 'CenterParent'; Font = $ui.Font; AutoSize = $true; AutoSizeMode = 'GrowAndShrink'
+        Padding = (New-PwPadding 12)
+    }
+    $t = New-PwControl TableLayoutPanel @{ ColumnCount = 2; AutoSize = $true; Dock = 'Fill' }
+    $boxes = @{}
+    $r = 0
+    foreach ($k in 'Current', 'New', 'Confirm') {
+        $label = switch ($k) { 'Current' { '今のパスワード' } 'New' { '新しいパスワード' } 'Confirm' { '新しいパスワード（確認）' } }
+        $t.Controls.Add((New-PwControl Label @{ Text = $label; AutoSize = $true; Margin = (New-PwPadding 3 7 10 3) }), 0, $r)
+        $boxes[$k] = New-PwControl TextBox @{ Width = 300; UseSystemPasswordChar = $true }
+        $t.Controls.Add($boxes[$k], 1, $r)
+        $r++
+    }
+    $hint = New-PwControl Label @{
+        AutoSize = $true; MaximumSize = (New-PwSize 300 0); ForeColor = [System.Drawing.SystemColors]::GrayText
+        Text = "$($script:MasterPasswordMinLength) 文字以上で、ほかでは使っていないもの。保存済みのデータはそのまま使えます。変更前のバックアップを戻すときは、変更前のパスワードが必要です。"
+    }
+    $t.Controls.Add($hint, 1, $r); $r++
+    $err = New-PwControl Label @{ AutoSize = $true; ForeColor = [System.Drawing.Color]::Firebrick; MaximumSize = (New-PwSize 300 0) }
+    $t.Controls.Add($err, 1, $r); $r++
+    $btns   = New-PwControl FlowLayoutPanel @{ FlowDirection = 'RightToLeft'; AutoSize = $true; Dock = 'Fill'; Margin = (New-PwPadding 0 8 0 0) }
+    $cancel = New-PwButton 'キャンセル'; $cancel.DialogResult = 'Cancel'
+    $ok     = New-PwButton '変更する'
+    $btns.Controls.AddRange([System.Windows.Forms.Control[]]@($cancel, $ok))
+    $t.Controls.Add($btns, 1, $r)
+    $dlg.Controls.Add($t)
+    $dlg.AcceptButton = $ok
+    $dlg.CancelButton = $cancel
+
+    $state = @{ Result = $null }
+    $ok.Add_Click({
+        if (-not $boxes['Current'].Text) { $err.Text = '今のパスワードを入力してください。'; return }
+        if (-not $boxes['New'].Text) { $err.Text = '新しいパスワードを入力してください。'; return }
+        $sec = @{}
+        foreach ($k in $boxes.Keys) {
+            # 確認欄が空でも比較できるよう、空のときは空の SecureString にする
+            $sec[$k] = if ($boxes[$k].Text) { ConvertTo-SecureString $boxes[$k].Text -AsPlainText -Force } else { New-Object System.Security.SecureString }
+        }
+        $problem = Test-PwMasterPasswordRule $sec['New'] $sec['Confirm'] $sec['Current']
+        if ($problem) { $err.Text = $problem; return }
+        $dlg.UseWaitCursor = $true
+        try {
+            $state.Result = Set-PwMasterPassword -Current $sec['Current'] -New $sec['New'] -Confirm:$false
+            $dlg.Close()
+        } catch {
+            $err.Text = $_.Exception.Message
+        } finally {
+            $dlg.UseWaitCursor = $false
+            foreach ($b in $boxes.Values) { $b.Clear() }
+            [void]$boxes['Current'].Focus()
+        }
+    })
+    $dlg.Add_Shown({ [void]$boxes['Current'].Focus() })
+    Register-PwActivity $ui $dlg
+    [void]$dlg.ShowDialog($ui.Form)
+    $dlg.Dispose()
+    $state.Result
+}
+
 function Show-PwEditDialog($ui, $Entry) {
     # 保存したらシークレット名を、キャンセルなら $null を返す
     $cfg = $ui.Cfg

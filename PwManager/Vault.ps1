@@ -143,3 +143,70 @@ function Remove-PwEntry {
     }
 }
 
+
+#region マスターパスワード
+
+$script:MasterPasswordMinLength = 12
+
+function Test-PwMasterPasswordRule([securestring]$New, [securestring]$Confirm, [securestring]$Current) {
+    # 新しいマスターパスワードの確認。問題があればその理由を、無ければ $null を返す
+    $a = ConvertFrom-PwSecureString $New
+    $b = ConvertFrom-PwSecureString $Confirm
+    $c = if ($Current) { ConvertFrom-PwSecureString $Current } else { $null }
+    try {
+        if ($a -cne $b) { return '新しいパスワードが一致しません。' }
+        if ($a.Length -lt $script:MasterPasswordMinLength) { return "$($script:MasterPasswordMinLength) 文字以上にしてください。" }
+        if ($null -ne $c -and $a -ceq $c) { return '今のパスワードと同じです。' }
+        $null
+    } finally { $a = $null; $b = $null; $c = $null }
+}
+
+function Read-PwNewMasterPassword([securestring]$Current) {
+    # コンソールで新しいマスターパスワードを 2 回入力してもらう（条件を満たすまで繰り返す）
+    while ($true) {
+        $p1 = Read-Host '新しいマスターパスワード' -AsSecureString
+        $p2 = Read-Host '確認のためもう一度' -AsSecureString
+        $problem = Test-PwMasterPasswordRule $p1 $p2 $Current
+        if (-not $problem) { return $p1 }
+        Write-Warning $problem
+    }
+}
+
+function Set-PwMasterPassword {
+    <#
+    .SYNOPSIS
+      マスターパスワードを変更する。保存済みのデータは、新しいパスワードで暗号化し直される。
+    .DESCRIPTION
+      変更前の保管庫を %APPDATA%\PwManager\pre-pwchange-*.zip に退避し（開くには変更前のパスワードが必要）、
+      変更後、BackupFolder が設定されていれば新しいパスワードでバックアップを取る。
+      PwManager の画面が別に開いているときは実行できない（画面の「マスターパスワード変更」を使うこと）。
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
+    param([securestring]$Current, [securestring]$New)
+    Assert-PwGuiClosed
+    if (-not $Current) { $Current = Read-Host '今のマスターパスワード' -AsSecureString }
+    if ($New) {
+        $problem = Test-PwMasterPasswordRule $New $New $Current
+        if ($problem) { throw $problem }
+    } else {
+        Write-Host "新しいマスターパスワード: $($script:MasterPasswordMinLength) 文字以上で、ほかでは使っていないもの"
+        $New = Read-PwNewMasterPassword $Current
+    }
+    if (-not $PSCmdlet.ShouldProcess('マスターパスワード', '変更')) { return }
+
+    $safety = Save-PwVaultSafetyCopy 'pre-pwchange'
+    try { Set-SecretStorePassword -Password $Current -NewPassword $New }
+    catch { throw "マスターパスワードを変更できませんでした（今のパスワードが違う可能性があります）。`n$($_.Exception.Message)" }
+    Unlock-PwVault $New
+    Write-PwAudit 'MASTERPW' '変更'
+
+    $backup = $null
+    $cfg = Get-PwConfig
+    if ($cfg.BackupFolder) {
+        try { $backup = (Backup-PwVault).FullName }
+        catch { Write-Warning "変更後のバックアップに失敗しました: $($_.Exception.Message)" }
+    }
+    [pscustomobject]@{ SafetyCopy = $safety; Backup = $backup }
+}
+
+#endregion

@@ -33,6 +33,26 @@ function Backup-PwVault {
     Get-Item -LiteralPath $zip
 }
 
+function Save-PwVaultSafetyCopy([string]$Kind) {
+    # 保管庫を大きく変える前に、%APPDATA%\PwManager\<Kind>-<日時>.zip に退避する（保管庫が無ければ何もしない）
+    $src = Join-Path $script:StoreRoot 'localstore'
+    if (-not (Test-Path -LiteralPath $src)) { return $null }
+    Initialize-PwDataDir
+    $zip = Join-Path $script:DataDir ('{0}-{1}.zip' -f $Kind, (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
+    Compress-Archive -LiteralPath $src -DestinationPath $zip
+    $zip
+}
+
+function Assert-PwGuiClosed {
+    # 別のプロセスで画面が開いていれば止める（この PowerShell 自身が画面を表示中なら問題ない）
+    if ($script:PinnedConfig) { return }   # PinnedConfig は、このプロセスで画面を表示している間だけ設定される
+    $m = $null
+    if ([System.Threading.Mutex]::TryOpenExisting($script:GuiMutexName, [ref]$m)) {
+        $m.Dispose()
+        throw 'PwManager の画面が開いています。画面を閉じてから、新しい PowerShell で実行してください。'
+    }
+}
+
 function Restore-PwVault {
     <#
     .SYNOPSIS
@@ -44,11 +64,8 @@ function Restore-PwVault {
         [Parameter(Mandatory)][string]$Path,
         [switch]$IncludeConfig
     )
-    $m = $null
-    if ([System.Threading.Mutex]::TryOpenExisting($script:GuiMutexName, [ref]$m)) {
-        $m.Dispose()
-        throw 'PwManager の画面が開いています。画面を閉じてから、新しい PowerShell で実行してください。'
-    }
+    if ($script:PinnedConfig) { throw '復元は、PwManager の画面を閉じてから、新しい PowerShell で実行してください。' }
+    Assert-PwGuiClosed
     $tmp = Join-Path $env:TEMP ('pwm-restore-' + [guid]::NewGuid().ToString('N'))
     try {
         Expand-Archive -LiteralPath $Path -DestinationPath $tmp
@@ -57,10 +74,8 @@ function Restore-PwVault {
         if (-not $PSCmdlet.ShouldProcess('現在の保管庫', "$Path の内容で置き換え")) { return }
 
         $dst = Join-Path $script:StoreRoot 'localstore'
-        if (Test-Path -LiteralPath $dst) {
-            Initialize-PwDataDir
-            $safety = Join-Path $script:DataDir ('pre-restore-{0}.zip' -f (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
-            Compress-Archive -LiteralPath $dst -DestinationPath $safety
+        $safety = Save-PwVaultSafetyCopy 'pre-restore'
+        if ($safety) {
             Write-Host "現在の保管庫を退避しました: $safety"
             Remove-Item -LiteralPath $dst -Recurse -Force
         }

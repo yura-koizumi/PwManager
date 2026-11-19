@@ -81,9 +81,10 @@ function Show-PwManager {
         $btnReload = New-PwButton '再読込 (F5)'
         $btnBackup = New-PwButton 'バックアップ'
         $btnConfig = New-PwButton '設定'
+        $btnMaster = New-PwButton 'マスターパスワード変更'
         $btnLock   = New-PwButton 'ロック (Ctrl+L)'
         $btnNew.Margin = New-PwPadding 16 3 3 3
-        $top.Controls.AddRange([System.Windows.Forms.Control[]]@($btnNew, $btnEdit, $btnDel, $btnReload, $btnBackup, $btnConfig, $btnLock))
+        $top.Controls.AddRange([System.Windows.Forms.Control[]]@($btnNew, $btnEdit, $btnDel, $btnReload, $btnBackup, $btnConfig, $btnMaster, $btnLock))
 
         $copyBar = New-PwControl FlowLayoutPanel @{ Dock = 'Top'; AutoSize = $true; Padding = (New-PwPadding 6 0 6 4) }
         $btnPw = New-PwButton 'パスワードをコピー (Enter)'
@@ -195,6 +196,7 @@ function Show-PwManager {
                 Show-PwMessage "設定ファイルをメモ帳で開きました。`n保存したあと、PwManager を開き直すと反映されます。"
             }
         })
+        $btnMaster.Add_Click({ Invoke-PwUi $ui { Invoke-PwUiChangePassword $ui } })
         $btnLock.Add_Click({ Invoke-PwUi $ui { Lock-PwUi $ui } })
 
         $form.Add_KeyDown({
