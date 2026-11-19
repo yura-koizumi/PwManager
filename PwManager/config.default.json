@@ -3,7 +3,7 @@
   "ClipboardClearSeconds": 30,
   "ExcludeFromClipboardHistory": true,
   "AutoLockMinutes": 10,
-  "UnlockTimeoutSeconds": 3600,
+  "UnlockTimeoutSeconds": 900,
   "Fields": [
     { "Name": "Id",   "Label": "ID",   "Copy": true },
     { "Name": "Url",  "Label": "URL",  "Copy": true, "Open": true },
