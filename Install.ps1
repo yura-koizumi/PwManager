@@ -28,7 +28,8 @@ if ($missing.Count -gt 0) {
     $nuget = Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue |
         Where-Object { $_.Version -ge [version]'2.8.5.201' }
     if (-not $nuget) { Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force | Out-Null }
-    Install-Module -Name $missing -Repository PSGallery -Scope CurrentUser -Force
+    # 動作確認済みのメジャーバージョン 1 系に固定（2.0 以降は互換性を確認してから上限を上げる）
+    foreach ($n in $missing) { Install-Module -Name $n -Repository PSGallery -Scope CurrentUser -MaximumVersion '1.999.999' -Force }
 } else {
     Write-Host '[1/4] モジュールは導入済みです。'
 }

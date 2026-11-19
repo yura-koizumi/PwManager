@@ -118,10 +118,12 @@ Backup-PwVault -Destination E:\Backup   # 保存先を指定する
 
 ZIP の中の保管庫データはマスターパスワードで暗号化されたままですが、念のため共有フォルダーなどには置かないでください。
 
+古いバックアップは `BackupKeep` の数を超えた分だけ自動で削除します。数えるのはこの PC のバックアップ（ファイル名に PC 名が入っています）だけなので、USB メモリーなどを複数の PC で共用しても、ほかの PC のバックアップは消しません。
+
 ### 復元・新しい PC への移行
 
 1. （新しい PC の場合）このフォルダーをコピーして `Install.ps1` を実行します。マスターパスワードを求められたら、仮のものを入力して構いません（復元すると上書きされます）。
-2. PwManager の画面を閉じ、**新しく開いた** PowerShell で次を実行します。
+2. PwManager の画面を閉じ、**新しく開いた** PowerShell で次を実行します（画面が開いていると、復元は止まります）。
 
    ```powershell
    Restore-PwVault -Path D:\Backup\PwManager\PwManager-backup-PC01-20261118-090000.zip -IncludeConfig
@@ -154,6 +156,8 @@ ZIP の中の保管庫データはマスターパスワードで暗号化され�
 将来、会社が公式のパスワード管理ツールを導入した場合などに備えて、CSV に書き出すこともできます。
 `Export-PwCsv -Path out.csv -IncludePassword` を実行すると、パスワードを平文で含めて書き出します（確認画面が出ます）。
 
+Excel で開いたときに数式として実行されないよう、`=` `+` `-` `@` で始まるタイトルや項目の値には、先頭に `'` を付けて書き出します（`Import-PwCsv` で取り込むと元に戻ります）。パスワードは書き換えません。
+
 ---
 
 ## 6. PowerShell から使う
@@ -175,8 +179,8 @@ ZIP の中の保管庫データはマスターパスワードで暗号化され�
 
 - パスワードは SecretStore によって暗号化して保存されます。開くにはマスターパスワードが必要です。
 - **秘密にすべき内容はパスワード欄に入れてください。** SecretManagement の仕様上、ID・URL・備考などのメタデータは、機密情報を入れることを前提にしていません。PIN や秘密の質問の答えなどは、備考に書かずに別のエントリとして登録してください。
-- 追加・更新・削除・バックアップの記録が `%APPDATA%\PwManager\audit.log` に残ります（パスワードそのものは記録しません）。
-- 席を離れるときは Windows のロック（**Win+L**）も併用してください。
+- 追加・更新・削除・バックアップの記録が `%APPDATA%\PwManager\audit.log` に残ります（パスワードそのものは記録しません）。1 MB（約 1 万件）を超えると `audit.old.log` に移し、その 1 つ前の記録は消えます。
+- 画面のロック（Ctrl+L・自動ロック）は、画面の表示を消して、再開時にマスターパスワードを確かめるものです。保管庫そのものは `UnlockTimeoutSeconds` の間、PwManager のプロセスの中で開いたままです。席を離れるときは Windows のロック（**Win+L**）も併用してください。
 - 会社の規程で、業務用パスワードの保管方法が定められている場合は、それに従ってください。
 
 ---
@@ -199,6 +203,7 @@ ZIP の中の保管庫データはマスターパスワードで暗号化され�
 PwManager\                 … 配布用フォルダー
   Install.ps1              … セットアップ・アップデート
   README.md
+  tests\                   … 自動テスト（配布・インストールの対象外）
   PwManager\               … 本体（Documents\WindowsPowerShell\Modules\PwManager にコピーされる）
     PwManager.psd1         … バージョン情報（更新するときは ModuleVersion を上げる）
     PwManager.psm1         … 保管庫の操作、バックアップ、CSV、コマンド
@@ -206,9 +211,23 @@ PwManager\                 … 配布用フォルダー
     Launch.ps1             … ショートカットから呼び出される起動スクリプト
     config.default.json    … 設定の既定値
 
-%APPDATA%\PwManager\       … config.json / state.json / audit.log / pre-restore-*.zip
+%APPDATA%\PwManager\       … config.json / state.json / audit.log / audit.old.log / pre-restore-*.zip
 %LOCALAPPDATA%\Microsoft\PowerShell\secretmanagement\localstore\  … 暗号化された保管庫（SecretStore が管理）
 ```
+
+### 修正するときの手順
+
+1. 修正したら、テストを実行します（追加のモジュールは不要で、実際の保管庫やデータには触れません）。
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Run-Tests.ps1
+   ```
+
+   クリップボードのテストは、実行中にクリップボードを書き換えます（終わると元のテキストに戻します）。
+2. `PwManager.psd1` の `ModuleVersion` を上げ、git にコミットします。
+3. 利用者は、新しいフォルダーで `Install.ps1` を実行すれば更新されます。
+
+SecretManagement / SecretStore は、`Install.ps1` でメジャーバージョン 1 系に固定しています。2.0 以降が出たら、テストと実際の画面で動作を確かめてから、`Install.ps1` の `-MaximumVersion` を上げてください。
 
 **保存形式（スキーマ v1）**
 

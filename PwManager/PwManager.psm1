@@ -26,6 +26,8 @@ $script:StoreRoot     = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secret
 $script:ReservedKeys  = @('Name', 'Title', 'Password', 'Created', 'Updated', 'Schema')
 $script:DateFormat    = 'yyyy-MM-dd HH:mm:ss'
 $script:PinnedConfig  = $null   # 画面の表示中だけ設定される（Get-PwConfig 参照）
+$script:GuiMutexName  = 'Local\PwManager-GUI'
+$script:AuditMaxBytes = 1MB     # これを超えたら audit.old.log に切り替える（約 1 万件分）
 
 #region 設定・状態・監査ログ ---------------------------------------------------
 
@@ -103,6 +105,9 @@ function Write-PwAudit([string]$Action, [string]$Detail) {
     # パスワードそのものは絶対に書かない
     try {
         Initialize-PwDataDir
+        if ((Test-Path -LiteralPath $script:AuditPath) -and (Get-Item -LiteralPath $script:AuditPath).Length -gt $script:AuditMaxBytes) {
+            Move-Item -LiteralPath $script:AuditPath -Destination ($script:AuditPath -replace '\.log$', '.old.log') -Force
+        }
         $line = "{0}`t{1}`t{2}`t{3}" -f (Get-Date -Format $script:DateFormat), $env:USERNAME, $Action, $Detail
         Add-Content -LiteralPath $script:AuditPath -Value $line -Encoding UTF8
     } catch { }
@@ -418,7 +423,10 @@ function Backup-PwVault {
 
     $keep = [int]$cfg.BackupKeep
     if ($keep -gt 0) {
+        # 同じ保存先をほかの PC と共用していても、この PC のバックアップだけを数えて消す
+        $mine = '^PwManager-backup-{0}-\d{{8}}-\d{{6}}\.zip$' -f [regex]::Escape($env:COMPUTERNAME)
         Get-ChildItem -LiteralPath $Destination -Filter 'PwManager-backup-*.zip' |
+            Where-Object { $_.Name -match $mine } |
             Sort-Object LastWriteTime -Descending | Select-Object -Skip $keep |
             Remove-Item -Force
     }
@@ -438,6 +446,11 @@ function Restore-PwVault {
         [Parameter(Mandatory)][string]$Path,
         [switch]$IncludeConfig
     )
+    $m = $null
+    if ([System.Threading.Mutex]::TryOpenExisting($script:GuiMutexName, [ref]$m)) {
+        $m.Dispose()
+        throw 'PwManager の画面が開いています。画面を閉じてから、新しい PowerShell で実行してください。'
+    }
     $tmp = Join-Path $env:TEMP ('pwm-restore-' + [guid]::NewGuid().ToString('N'))
     try {
         Expand-Archive -LiteralPath $Path -DestinationPath $tmp
@@ -448,7 +461,7 @@ function Restore-PwVault {
         $dst = Join-Path $script:StoreRoot 'localstore'
         if (Test-Path -LiteralPath $dst) {
             Initialize-PwDataDir
-            $safety = Join-Path $script:DataDir ('pre-restore-{0}.zip' -f (Get-Date -Format 'yyyyMMdd-HHmmss'))
+            $safety = Join-Path $script:DataDir ('pre-restore-{0}.zip' -f (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
             Compress-Archive -LiteralPath $dst -DestinationPath $safety
             Write-Host "現在の保管庫を退避しました: $safety"
             Remove-Item -LiteralPath $dst -Recurse -Force
@@ -469,6 +482,18 @@ function Restore-PwVault {
     } finally {
         Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue
     }
+}
+
+# Excel で開いたとき数式として実行されないよう、= + - @ タブ CR で始まる値の先頭に ' を付ける。
+# パスワードは値を変えないため対象外。Import-PwCsv は付けた ' を取り除く。
+$script:CsvFormulaPattern = "^[=+\-@`t`r]"
+
+function Protect-PwCsvValue([string]$Value) {
+    if ($Value -match $script:CsvFormulaPattern) { "'" + $Value } else { $Value }
+}
+
+function Unprotect-PwCsvValue([string]$Value) {
+    if ($Value.Length -gt 1 -and $Value[0] -eq "'" -and $Value.Substring(1) -match $script:CsvFormulaPattern) { $Value.Substring(1) } else { $Value }
 }
 
 function Import-PwCsv {
@@ -493,11 +518,11 @@ function Import-PwCsv {
     }
     $ok = 0; $skip = 0
     foreach ($r in $rows) {
-        $title = & $pick $r @('Title', 'タイトル', 'サービス', 'Service', 'サービス名')
+        $title = Unprotect-PwCsvValue (& $pick $r @('Title', 'タイトル', 'サービス', 'Service', 'サービス名'))
         $pw    = & $pick $r @('Password', 'パスワード', 'PW')
         if (-not $title -or -not $pw) { $skip++; continue }
         $fields = @{}
-        foreach ($f in @($cfg.Fields)) { $fields[$f.Name] = & $pick $r @($f.Name, $f.Label) }
+        foreach ($f in @($cfg.Fields)) { $fields[$f.Name] = Unprotect-PwCsvValue (& $pick $r @($f.Name, $f.Label)) }
         Save-PwEntry -Title $title -Fields $fields -Password (ConvertTo-SecureString $pw -AsPlainText -Force) | Out-Null
         $ok++
     }
@@ -519,9 +544,9 @@ function Export-PwCsv {
     $cfg = Get-PwConfig
     if ($IncludePassword -and -not $PSCmdlet.ShouldProcess($Path, 'パスワードを平文で書き出す')) { return }
     $rows = foreach ($e in @(Get-PwEntry)) {
-        $h = [ordered]@{ Title = $e.Title }
+        $h = [ordered]@{ Title = Protect-PwCsvValue $e.Title }
         if ($IncludePassword) { $h['Password'] = Get-PwPassword $e.Name }
-        foreach ($f in @($cfg.Fields)) { $h[$f.Name] = $e.($f.Name) }
+        foreach ($f in @($cfg.Fields)) { $h[$f.Name] = Protect-PwCsvValue $e.($f.Name) }
         $h['Updated'] = $e.Updated
         [pscustomobject]$h
     }

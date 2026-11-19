@@ -3,7 +3,7 @@
 *.zip
 config.json
 state.json
-audit.log
+audit*.log
 pre-restore-*
 
 # エディター・ツールのローカル設定

@@ -404,7 +404,7 @@ function Show-PwManager {
         throw '画面は STA モードで実行してください（powershell.exe -STA）。'
     }
 
-    $mutex = New-Object System.Threading.Mutex($false, 'Local\PwManager-GUI')
+    $mutex = New-Object System.Threading.Mutex($false, $script:GuiMutexName)
     $owned = $false
     try { $owned = $mutex.WaitOne(0) } catch [System.Threading.AbandonedMutexException] { $owned = $true }
     if (-not $owned) { Show-PwMessage 'PwManager はすでに起動しています。'; $mutex.Dispose(); return }
