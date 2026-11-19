@@ -177,9 +177,9 @@ function Set-PwMasterPassword {
     .SYNOPSIS
       マスターパスワードを変更する。保存済みのデータは、新しいパスワードで暗号化し直される。
     .DESCRIPTION
-      変更前の保管庫を %APPDATA%\PwManager\pre-pwchange-*.zip に退避し（開くには変更前のパスワードが必要）、
-      変更後、BackupFolder が設定されていれば新しいパスワードでバックアップを取る。
-      PwManager の画面が別に開いているときは実行できない（画面の「マスターパスワード変更」を使うこと）。
+      変更前の保管庫を %APPDATA%\PwManager\pre-pwchange-*.zip に退避する（開くには変更前のパスワードが必要）。
+      それまでに取ったバックアップも、開くには変更前のパスワードが必要。
+      PwManager の画面が別に開いているときは実行できない（画面の ≡ →「マスターパスワードの変更」を使うこと）。
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
     param([securestring]$Current, [securestring]$New)
@@ -199,14 +199,7 @@ function Set-PwMasterPassword {
     catch { throw "マスターパスワードを変更できませんでした（今のパスワードが違う可能性があります）。`n$($_.Exception.Message)" }
     Unlock-PwVault $New
     Write-PwAudit 'MASTERPW' '変更'
-
-    $backup = $null
-    $cfg = Get-PwConfig
-    if ($cfg.BackupFolder) {
-        try { $backup = (Backup-PwVault).FullName }
-        catch { Write-Warning "変更後のバックアップに失敗しました: $($_.Exception.Message)" }
-    }
-    [pscustomobject]@{ SafetyCopy = $safety; Backup = $backup }
+    [pscustomobject]@{ SafetyCopy = $safety }
 }
 
 #endregion

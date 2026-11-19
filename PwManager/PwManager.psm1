@@ -4,7 +4,7 @@
 
   データの置き場所
     プログラム : このフォルダー（Install.ps1 で Documents\WindowsPowerShell\Modules\PwManager にコピー）
-    設定・状態 : %APPDATA%\PwManager\        (config.json / state.json / audit.log)
+    設定・ログ : %APPDATA%\PwManager\        (config.json / audit.log)
     保管庫     : %LOCALAPPDATA%\Microsoft\PowerShell\secretmanagement\localstore  (SecretStore が管理・暗号化)
 
   エントリの保存形式（スキーマ v1）
@@ -20,7 +20,6 @@ $script:SecretPrefix  = 'pwm:'
 $script:SchemaVersion = 1
 $script:DataDir       = Join-Path $env:APPDATA 'PwManager'
 $script:ConfigPath    = Join-Path $script:DataDir 'config.json'
-$script:StatePath     = Join-Path $script:DataDir 'state.json'
 $script:AuditPath     = Join-Path $script:DataDir 'audit.log'
 $script:StoreRoot     = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secretmanagement'
 $script:ReservedKeys  = @('Name', 'Title', 'Password', 'Created', 'Updated', 'Schema')

@@ -41,13 +41,9 @@ $r = Set-PwMasterPassword -Current (S 'old-password-123') -New (S 'new-password-
 Check '新しいパスワードに変わる'           ($global:StorePassword -eq 'new-password-123')
 Check '変更後、新しいパスワードで解除する' (($global:Calls -join ',') -eq 'set,unlock:new-password-123')
 Check '変更前の保管庫を退避する'           ($r.SafetyCopy -and (Test-Path -LiteralPath $r.SafetyCopy) -and (Split-Path $r.SafetyCopy -Leaf) -like 'pre-pwchange-*.zip')
-Check 'BackupFolder が未設定ならバックアップしない' ($null -eq $r.Backup)
 Check '監査ログに残す（パスワードは書かない）' ((Get-Content -LiteralPath $audit -Raw -Encoding UTF8) -match 'MASTERPW' -and (Get-Content -LiteralPath $audit -Raw) -notmatch 'password-123')
 
-$backupDir = Join-Path $TestRoot 'backup'
-'{ "BackupFolder": "' + ($backupDir -replace '\\', '\\') + '" }' | Set-Content -LiteralPath (Join-Path $dataDir 'config.json') -Encoding UTF8
 $r = Set-PwMasterPassword -Current (S 'new-password-123') -New (S 'third-password-1') -Confirm:$false
-Check 'BackupFolder があれば、変更後にバックアップする' ($r.Backup -and (Test-Path -LiteralPath $r.Backup) -and $r.Backup.StartsWith($backupDir))
 
 Write-Host '画面が開いているとき'
 $mutex = New-Object System.Threading.Mutex($true, 'Local\PwManager-GUI')

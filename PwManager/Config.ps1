@@ -54,38 +54,6 @@ function Edit-PwConfig {
     'Explorer'
 }
 
-function Set-PwConfigValue([string]$Name, $Value) {
-    # 設定ファイル（config.json）の 1 項目だけを書き換える。画面の表示中なら、表示中の設定にも反映する
-    Initialize-PwDataDir
-    $user = if (Test-Path -LiteralPath $script:ConfigPath) { Read-PwJson $script:ConfigPath } else { $null }
-    if (-not $user) { $user = [pscustomobject]@{} }
-    $user | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
-    $user | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $script:ConfigPath -Encoding UTF8
-    if ($script:PinnedConfig) { $script:PinnedConfig[$Name] = $Value }
-}
-
-function Get-PwState {
-    if (Test-Path -LiteralPath $script:StatePath) {
-        try { $s = Read-PwJson $script:StatePath; if ($s) { return $s } } catch { }
-    }
-    [pscustomobject]@{}
-}
-
-function Set-PwStateValue([string]$Name, $Value) {
-    $s = Get-PwState
-    $s | Add-Member -NotePropertyName $Name -NotePropertyValue $Value -Force
-    Initialize-PwDataDir
-    $s | ConvertTo-Json | Set-Content -LiteralPath $script:StatePath -Encoding UTF8
-}
-
-function Get-PwLastBackup {
-    $s = Get-PwState
-    if ($s.PSObject.Properties['LastBackup']) {
-        try { return [datetime]::ParseExact([string]$s.LastBackup, $script:DateFormat, [Globalization.CultureInfo]::InvariantCulture) } catch { }
-    }
-    $null
-}
-
 function Write-PwAudit([string]$Action, [string]$Detail) {
     # パスワードそのものは絶対に書かない
     try {

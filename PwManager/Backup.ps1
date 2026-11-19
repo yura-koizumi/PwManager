@@ -4,13 +4,11 @@
 function Backup-PwVault {
     <#
     .SYNOPSIS
-      保管庫（暗号化されたまま）と設定を ZIP にバックアップし、古いものを自動削除する。
+      保管庫（暗号化されたまま）と設定を ZIP にバックアップする。新しい PC への移行や、万一に備えて手で取る。
+      開くには、バックアップを取ったときのマスターパスワードが必要。
     #>
     [CmdletBinding()]
-    param([string]$Destination)
-    $cfg = Get-PwConfig
-    if (-not $Destination) { $Destination = [Environment]::ExpandEnvironmentVariables([string]$cfg.BackupFolder) }
-    if (-not $Destination) { throw 'バックアップ先が未設定です。Edit-PwConfig で BackupFolder を設定するか、-Destination を指定してください。' }
+    param([Parameter(Mandatory)][string]$Destination)
     if (-not (Test-Path -LiteralPath (Join-Path $script:StoreRoot 'localstore'))) { throw "保管庫データが見つかりません: $($script:StoreRoot)\localstore" }
 
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
@@ -18,17 +16,6 @@ function Backup-PwVault {
     $paths = @($script:StoreRoot)
     if (Test-Path -LiteralPath $script:ConfigPath) { $paths += $script:ConfigPath }
     Compress-Archive -LiteralPath $paths -DestinationPath $zip -CompressionLevel Optimal
-
-    $keep = [int]$cfg.BackupKeep
-    if ($keep -gt 0) {
-        # 同じ保存先をほかの PC と共用していても、この PC のバックアップだけを数えて消す
-        $mine = '^PwManager-backup-{0}-\d{{8}}-\d{{6}}\.zip$' -f [regex]::Escape($env:COMPUTERNAME)
-        Get-ChildItem -LiteralPath $Destination -Filter 'PwManager-backup-*.zip' |
-            Where-Object { $_.Name -match $mine } |
-            Sort-Object LastWriteTime -Descending | Select-Object -Skip $keep |
-            Remove-Item -Force
-    }
-    Set-PwStateValue 'LastBackup' (Get-Date -Format $script:DateFormat)
     Write-PwAudit 'BACKUP' $zip
     Get-Item -LiteralPath $zip
 }

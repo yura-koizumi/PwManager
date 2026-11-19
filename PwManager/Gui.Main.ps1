@@ -219,7 +219,6 @@ function Show-PwManager {
             Invoke-PwUi $ui {
                 Update-PwUiData $ui
                 Set-PwUiStatus $ui 'Enter: パスワードをコピー / ダブルクリック: その列をコピー / 右クリック: メニュー'
-                Invoke-PwUiStartupBackup $ui
             }
             [void]$search.Focus()
             $timer.Start()

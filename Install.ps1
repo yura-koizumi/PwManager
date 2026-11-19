@@ -77,4 +77,3 @@ if (-not $NoShortcut) {
 Write-Host ''
 Write-Host 'セットアップが完了しました。' -ForegroundColor Green
 Write-Host '  起動: デスクトップの「PwManager」、または PowerShell で  pwm'
-Write-Host '  最初に: 画面の ≡ →「バックアップ」で保存先を選んでください（以後は自動でバックアップします）'

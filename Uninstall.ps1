@@ -22,13 +22,11 @@ $dataDir   = Join-Path $env:APPDATA 'PwManager'
 $storeDir  = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secretmanagement\localstore'
 $moduleDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PwManager'
 $vaultName = 'PwVault'
-$backupFolder = ''
 $configPath = Join-Path $dataDir 'config.json'
 if (Test-Path -LiteralPath $configPath) {
     try {
         $c = Get-Content -LiteralPath $configPath -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($c.VaultName) { $vaultName = [string]$c.VaultName }
-        if ($c.BackupFolder) { $backupFolder = [Environment]::ExpandEnvironmentVariables([string]$c.BackupFolder) }
     } catch { }
 }
 
@@ -102,7 +100,7 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
         if (Test-Path -LiteralPath $storeDir) { Write-Host "  保管庫（暗号化されたデータ）: $storeDir" }
         if (Test-Path -LiteralPath $dataDir)  { Write-Host "  設定・監査ログ・退避ファイル: $dataDir" }
         foreach ($w in $warnings) { Write-Warning $w }
-        if ($backupFolder) { Write-Host "  ※ バックアップ先（$backupFolder）のバックアップは削除しません。不要なら手で削除してください。" }
+        Write-Host '  ※ 手で取ったバックアップ（ZIP）は削除しません。不要なら手で削除してください。'
         $confirm = Read-Host '本当に削除するときは DELETE と入力してください（それ以外は中止してデータを残します）'
         if ($confirm -cne 'DELETE') {
             Write-Kept

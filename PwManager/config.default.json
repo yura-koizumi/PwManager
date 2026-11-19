@@ -14,8 +14,5 @@
     "Length": 20,
     "Symbols": true,
     "SymbolChars": "!#$%&*+-=?@_"
-  },
-  "BackupFolder": "",
-  "BackupKeep": 30,
-  "BackupIntervalDays": 7
+  }
 }
