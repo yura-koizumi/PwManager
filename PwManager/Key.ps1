@@ -14,7 +14,7 @@
 
 $script:KeyPath       = Join-Path $script:DataDir 'vaultkey.json'
 $script:RecoveryKeyDir = $null     # 回復キーのファイルの保存先（$null ならデスクトップ。テストで切り替える）
-$script:KdfIterations = 100000    # PBKDF2-SHA256 の回数（約 0.5 秒）。外側を DPAPI で包むので、この回数で十分
+$script:KdfIterations = 300000    # PBKDF2-SHA256 の回数（約 1 秒）。回数はキーのファイルに残すので、変えても既存のものは開ける
 $script:DpapiEntropy  = [Text.Encoding]::UTF8.GetBytes('PwManager.VaultKey.v1')
 $script:Base32        = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'   # 回復キーの文字（Crockford Base32: I L O U は使わない）
 Add-Type -AssemblyName System.Security   # ProtectedData（DPAPI）。.NET 標準のアセンブリを読み込むだけ
