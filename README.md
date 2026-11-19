@@ -227,6 +227,7 @@ PwManager\                 … 配布用フォルダー
   Uninstall.bat / Uninstall.ps1  … アンインストール（既定ではデータを残す）
   README.md
   tests\                   … 自動テスト（配布・インストールの対象外）
+  tools\Build-Release.ps1  … リリース用フォルダー（release\、git の管理対象外）を作る
   PwManager\               … 本体（Documents\WindowsPowerShell\Modules\PwManager にコピーされる）
     PwManager.psd1         … バージョン情報（更新するときは ModuleVersion を上げる）
     PwManager.psm1         … 共通の定数と、下の各ファイルの読み込み
@@ -266,7 +267,15 @@ PwManager\                 … 配布用フォルダー
    ```
 
 2. `PwManager.psd1` の `ModuleVersion` を上げ、git にコミットします。
-3. 利用者は、新しいフォルダーで `Install.ps1` を実行すれば更新されます。
+3. リリース用のフォルダーを作ります（テストを実行し、成功したときだけ作ります）。
+
+   ```powershell
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-Release.ps1
+   ```
+
+   `release\PwManager-<バージョン>\` と、その ZIP ができます。利用者にはこれを渡します（テストや git の情報は含まれません）。配布するファイルを増やしたときは、`Build-Release.ps1` の一覧にも追加します。
+4. 配る前に、Windows Sandbox で確かめます。`release\PwManager-Sandbox.wsb` をダブルクリックすると、リリースフォルダーがデスクトップの `PwManager` に読み取り専用で割り当てられた Sandbox が開くので、そこで `Install.bat` を実行します。Sandbox でテストやデモ（`tests\Demo-Gui.ps1`）も動かしたいときは、`-IncludeTests` を付けて作ります。
+5. 利用者は、新しいフォルダーで `Install.bat` を実行すれば更新されます。
 
 SecretManagement / SecretStore は、`Install.ps1` でメジャーバージョン 1 系に固定しています。2.0 以降が出たら、テストと実際の画面で動作を確かめてから、`Install.ps1` の `-MaximumVersion` を上げてください。
 

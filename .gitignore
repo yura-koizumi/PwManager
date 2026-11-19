@@ -5,8 +5,12 @@ config.json
 state.json
 audit*.log
 pre-restore-*
+pre-pwchange-*
 
 # エディター・ツールのローカル設定
 .vscode/
 .claude/settings.local.json
 Thumbs.db
+
+# リリース用に作るフォルダー（tools\Build-Release.ps1 で作り直せる）
+release/
