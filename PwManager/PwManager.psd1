@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'PwManager.psm1'
-    ModuleVersion     = '1.0.1'
+    ModuleVersion     = '1.0.2'
     GUID              = '67758978-7d08-419a-a448-af502dfd98f4'
     Author            = 'yura'
     Description       = 'SecretManagement / SecretStore を使ったローカルパスワード管理ツール'

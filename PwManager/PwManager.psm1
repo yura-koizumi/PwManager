@@ -146,16 +146,24 @@ function Unlock-PwVault([securestring]$Password) {
     Unlock-SecretStore -Password $Password -PasswordTimeout ([int]$cfg.UnlockTimeoutSeconds)
 }
 
-function ConvertTo-PwEntry($Info, $Cfg) {
-    $m = $Info.Metadata
-    $get = {
-        param([string]$Key)
-        if ($m -and $m.ContainsKey($Key) -and $null -ne $m[$Key]) { [string]$m[$Key] } else { '' }
+function Get-PwSecretInfo([string]$Name) {
+    <# 保管庫のエントリ情報（SecretInfo）を並べ替えずに返す。-Name を指定するとその 1 件だけ。画面からも使う。 #>
+    $cfg = Get-PwConfig
+    $pattern = if ($Name) { $Name } else { "$($script:SecretPrefix)*" }
+    foreach ($info in @(Get-SecretInfo -Vault $cfg.VaultName -Name $pattern)) {
+        if (-not $Name -or $info.Name -eq $Name) { $info }
     }
-    $h = [ordered]@{ Name = $Info.Name; Title = (& $get 'Title') }
-    foreach ($f in @($Cfg.Fields)) { $h[$f.Name] = & $get $f.Name }
-    $h['Created'] = & $get 'Created'
-    $h['Updated'] = & $get 'Updated'
+}
+
+function Get-PwEntryKeys($Cfg) {
+    # エントリの項目名（Name 以外）
+    [string[]](@('Title') + @(foreach ($f in $Cfg.Fields) { $f.Name }) + @('Created', 'Updated'))
+}
+
+function ConvertTo-PwEntry([string]$Name, $Meta, [string[]]$Keys) {
+    # Metadata は読み取り専用の辞書で、無いキーを引くと例外になるため ContainsKey で確かめる
+    $h = [ordered]@{ Name = $Name }
+    foreach ($k in $Keys) { $h[$k] = if ($Meta -and $Meta.ContainsKey($k)) { [string]$Meta[$k] } else { '' } }
     [pscustomobject]$h
 }
 
@@ -178,8 +186,8 @@ function Get-PwEntry {
     [CmdletBinding()]
     param([Parameter(Position = 0)][string]$Filter)
     $cfg = Get-PwConfig
-    $infos = @(Get-SecretInfo -Vault $cfg.VaultName -Name "$($script:SecretPrefix)*")
-    $list = @(foreach ($i in $infos) { ConvertTo-PwEntry $i $cfg })
+    $keys = Get-PwEntryKeys $cfg
+    $list = @(foreach ($i in Get-PwSecretInfo) { ConvertTo-PwEntry $i.Name $i.Metadata $keys })
     if ($Filter) { $list = @($list | Where-Object { Test-PwMatch $_ $Filter $cfg }) }
     $list | Sort-Object Title
 }
