@@ -174,11 +174,18 @@ Excel で開いたときに数式として実行されないよう、`=` `+` `-`
 | `Get-PwEntry ポータル` | 一覧を検索する（パスワードは表示しない） |
 | `Copy-PwField ポータル` | パスワードをコピーする |
 | `Copy-PwField ポータル Id` | ID をコピーする |
+| `New-PwEntry Amazon -Fields @{ ID = 'taro'; URL = 'https://…' } -Generate` | 登録する（`-Generate` でパスワードを生成。付けなければ入力を求める） |
+| `Set-PwEntry Amazon -Fields @{ URL = 'https://…' }` | 指定した項目だけ変える（`-Title` でタイトル、`-Generate` / `-PromptPassword` でパスワード） |
+| `Remove-PwEntry Amazon` | 削除する（確認あり） |
 | `New-PwPassword -Length 24` | パスワードを生成する |
 | `Edit-PwConfig` | 設定ファイルを開く |
 | `Backup-PwVault` / `Restore-PwVault` | バックアップ・復元 |
 | `Set-PwMasterPassword` | マスターパスワードを変更する |
 | `Import-PwCsv` / `Export-PwCsv` | CSV の取り込み・書き出し |
+
+- パスワードは引数に平文で書かず、`-Generate` で生成するか、入力欄に入力します（コマンドの履歴に残さないため）。
+- `Get-PwEntry 旧 | Remove-PwEntry` のように、検索結果をパイプで渡すこともできます。検索語に複数のエントリが当てはまるときは、選ぶ画面が出ます。
+- 保管庫に書き込むコマンド（登録・編集・削除・CSV の取り込み・マスターパスワードの変更）は、PwManager の画面を閉じてから実行します。
 
 ---
 
@@ -225,6 +232,7 @@ PwManager\                 … 配布用フォルダー
     Csv.ps1                … CSV の取り込み・書き出し
     Setup.ps1              … 初期設定とショートカット
     List.ps1               … 一覧のデータ（表の作成・検索条件・1 行単位の更新）。画面に依存せず、tests\List.Tests.ps1 で検証
+    Cli.ps1                … 登録・編集・削除のコマンド（New-PwEntry / Set-PwEntry / Remove-PwEntry）
     Gui.Dialogs.ps1        … 画面の共通部品とダイアログ（ロック解除・登録/編集）
     Gui.List.ps1           … 一覧の画面側（List.ps1 のデータをグリッド・検索欄に結び付ける）
     Gui.Actions.ps1        … 画面の操作（コピー・登録・編集・削除・バックアップ・ロック）

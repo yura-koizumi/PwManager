@@ -131,15 +131,34 @@ function Save-PwEntry {
 }
 
 function Remove-PwEntry {
-    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
-    param([Parameter(Mandatory)][string]$Name)
-    $cfg = Get-PwConfig
-    $info = Get-SecretInfo -Vault $cfg.VaultName -Name $Name | Where-Object { $_.Name -eq $Name }
-    if (-not $info) { throw "エントリが見つかりません: $Name" }
-    $title = if ($info.Metadata -and $info.Metadata.ContainsKey('Title')) { $info.Metadata['Title'] } else { $Name }
-    if ($PSCmdlet.ShouldProcess($title, '削除')) {
-        Remove-Secret -Vault $cfg.VaultName -Name $Name
-        Write-PwAudit 'DELETE' "$title [$Name]"
+    <#
+    .SYNOPSIS
+      エントリを削除する（確認あり。戻すにはバックアップからの復元が必要）。
+    .EXAMPLE
+      Remove-PwEntry 旧システム
+    .EXAMPLE
+      Get-PwEntry テスト | Remove-PwEntry     # 一致したものを 1 件ずつ確認して削除
+    #>
+    [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High', DefaultParameterSetName = 'Query')]
+    param(
+        [Parameter(Mandatory, Position = 0, ParameterSetName = 'Query')][string]$Query,
+        [Parameter(Mandatory, ValueFromPipelineByPropertyName, ParameterSetName = 'Name')][string]$Name
+    )
+    begin { Assert-PwGuiClosed; $cfg = Get-PwConfig }
+    process {
+        if ($PSCmdlet.ParameterSetName -eq 'Query') {
+            $entry = Resolve-PwEntry $Query
+            if (-not $entry) { return }
+            $Name = $entry.Name
+        }
+        $info = @(Get-PwSecretInfo $Name)
+        if ($info.Count -eq 0) { throw "エントリが見つかりません: $Name" }
+        $m = $info[0].Metadata
+        $title = if ($m -and $m.ContainsKey('Title')) { [string]$m['Title'] } else { $Name }
+        if ($PSCmdlet.ShouldProcess($title, '削除')) {
+            Remove-Secret -Vault $cfg.VaultName -Name $Name
+            Write-PwAudit 'DELETE' "$title [$Name]"
+        }
     }
 }
 

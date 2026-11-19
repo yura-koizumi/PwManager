@@ -29,12 +29,13 @@ $script:GuiMutexName  = 'Local\PwManager-GUI'
 $script:AuditMaxBytes = 1MB     # これを超えたら audit.old.log に切り替える（約 1 万件分）
 
 # 機能ごとのファイルを読み込む
-#   Config      設定・状態・監査ログ          Vault       保管庫の操作
+#   Config      設定・監査ログ                Vault       保管庫の操作
 #   Clipboard   クリップボード                Password    パスワード生成
 #   Backup      バックアップ・復元            Csv         CSV の取り込み・書き出し
 #   Setup       初期設定とショートカット      List        一覧のデータ（画面に依存しない）
+#   Cli         登録・編集・削除のコマンド
 #   Gui.*       画面（Dialogs: 共通部品とダイアログ / List: 一覧 / Actions: 操作 / Main: メイン画面）
-foreach ($file in 'Config', 'Vault', 'Clipboard', 'Password', 'Backup', 'Csv', 'Setup', 'List',
+foreach ($file in 'Config', 'Vault', 'Clipboard', 'Password', 'Backup', 'Csv', 'Setup', 'List', 'Cli',
                   'Gui.Dialogs', 'Gui.List', 'Gui.Actions', 'Gui.Main') {
     . (Join-Path $PSScriptRoot "$file.ps1")
 }

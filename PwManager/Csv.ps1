@@ -28,6 +28,7 @@ function Import-PwCsv {
         [ValidateSet('UTF8', 'Default')][string]$Encoding = 'UTF8',
         [switch]$IgnoreUnknownColumns
     )
+    Assert-PwGuiClosed
     $cfg = Get-PwConfig
     $rows = @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
     # 日時の列は Export-PwCsv が書き出すが、取り込み時に付け直すので読まない（知っている列として扱う）

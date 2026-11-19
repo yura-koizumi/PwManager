@@ -1,6 +1,6 @@
 ﻿@{
     RootModule        = 'PwManager.psm1'
-    ModuleVersion     = '1.2.0'
+    ModuleVersion     = '1.3.0'
     GUID              = '67758978-7d08-419a-a448-af502dfd98f4'
     Author            = 'yura'
     Description       = 'SecretManagement / SecretStore を使ったローカルパスワード管理ツール'
@@ -8,6 +8,9 @@
     FunctionsToExport = @(
         'Show-PwManager'
         'Get-PwEntry'
+        'New-PwEntry'
+        'Set-PwEntry'
+        'Remove-PwEntry'
         'Copy-PwField'
         'New-PwPassword'
         'Backup-PwVault'

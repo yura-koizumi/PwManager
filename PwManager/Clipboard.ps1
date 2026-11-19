@@ -81,13 +81,7 @@ function Copy-PwField {
         [Parameter(Position = 1)][string]$Field = 'Password'
     )
     $cfg = Get-PwConfig
-    $hits = @(Get-PwEntry -Filter $Query)
-    $exact = @($hits | Where-Object { $_.Title -eq $Query })
-    if ($exact.Count -eq 1) { $hits = $exact }
-    if ($hits.Count -eq 0) { throw "「$Query」に一致するエントリはありません。" }
-    $entry = if ($hits.Count -eq 1) { $hits[0] } else {
-        $hits | Out-GridView -Title '対象を選んで [OK] を押してください' -OutputMode Single
-    }
+    $entry = Resolve-PwEntry $Query
     if (-not $entry) { return }
 
     if ($Field -in 'Password', 'PW', 'パスワード') {
