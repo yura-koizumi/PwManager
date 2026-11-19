@@ -13,6 +13,7 @@
 #>
 
 $script:KeyPath       = Join-Path $script:DataDir 'vaultkey.json'
+$script:RecoveryKeyDir = $null     # 回復キーのファイルの保存先（$null ならデスクトップ。テストで切り替える）
 $script:KdfIterations = 100000    # PBKDF2-SHA256 の回数（約 0.5 秒）。外側を DPAPI で包むので、この回数で十分
 $script:DpapiEntropy  = [Text.Encoding]::UTF8.GetBytes('PwManager.VaultKey.v1')
 $script:Base32        = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'   # 回復キーの文字（Crockford Base32: I L O U は使わない）
@@ -197,13 +198,25 @@ function New-PwVaultKeySet([securestring]$MasterPassword) {
 }
 
 function Show-PwRecoveryKey([string]$Text) {
+    # 回復キーをデスクトップのテキストファイルに出し、画面にも表示する。ファイルの場所を返す
+    $dir = if ($script:RecoveryKeyDir) { $script:RecoveryKeyDir } else { [Environment]::GetFolderPath('Desktop') }
+    $path = Join-Path $dir ('PwManager-回復キー-{0}-{1}.txt' -f $env:COMPUTERNAME, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    @(
+        'PwManager 回復キー'
+        ''
+        "    $Text"
+        ''
+        "作成: $(Get-Date -Format 'yyyy/MM/dd HH:mm')  PC: $env:COMPUTERNAME  ユーザー: $env:USERNAME"
+        ''
+        '・バックアップから戻すとき（Restore-PwVault）と、マスターパスワードを忘れたとき（Set-PwMasterPassword -UseRecoveryKey）に使います。'
+        '・印刷するか USB メモリーなどに移して、このファイルは PC から削除してください。'
+        '  PC に残すと、保管庫と一緒に持ち出されたときに開かれてしまいます。バックアップの ZIP とも別の場所に保管してください。'
+    ) | Set-Content -LiteralPath $path -Encoding UTF8
     Write-Host ''
-    Write-Host '  回復キー（バックアップから戻すときと、マスターパスワードを忘れたときに使います）' -ForegroundColor Yellow
-    Write-Host ''
-    Write-Host "      $Text" -ForegroundColor White
-    Write-Host ''
-    Write-Host '  紙などに控えて、バックアップとは別の場所に保管してください。この画面を閉じると、二度と表示できません。'
-    [void](Read-Host '  控えたら Enter')
+    Write-Host "  回復キー: $Text" -ForegroundColor Yellow
+    Write-Host "  保存先  : $path"
+    Write-Host '  印刷するか USB メモリーなどに移して、このファイルは PC から削除してください。'
+    $path
 }
 
 function New-PwRecoveryKey {

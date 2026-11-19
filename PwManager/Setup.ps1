@@ -35,7 +35,7 @@ function Initialize-PwManager {
         throw
     }
     Write-Host '保管庫を作成しました。' -ForegroundColor Green
-    Show-PwRecoveryKey $set.RecoveryKey
+    [void](Show-PwRecoveryKey $set.RecoveryKey)
 }
 
 function Install-PwShortcut {

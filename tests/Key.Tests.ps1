@@ -64,11 +64,16 @@ Check '回復キーで保管庫キーを取り出せる'       ((& $rec $set.Rec
 $err = $null; try { & $rec ($set.RecoveryKey.Substring(0, 38) + $(if ($set.RecoveryKey[38] -eq 'A') { 'B' } else { 'A' })) } catch { $err = $_ }
 Check '回復キーが 1 文字でも違えば取り出せない' ($err -and $err.Exception.Message -match '回復キーが違います')
 
+Write-Host '回復キーのファイル（Show-PwRecoveryKey）'
+$keyDir = Join-Path $TestRoot 'Desktop'; New-Item -ItemType Directory -Path $keyDir | Out-Null
+& $Pwm { param($d) $script:RecoveryKeyDir = $d } $keyDir
+$file = & $Pwm { param($t) Show-PwRecoveryKey $t } $text 6>$null
+Check 'デスクトップ（の代わりのフォルダー）にテキストファイルを出す' ((Split-Path $file) -eq $keyDir -and (Get-Content -LiteralPath $file -Raw -Encoding UTF8) -match [regex]::Escape($text))
+Check 'PC から削除するよう書いておく' ((Get-Content -LiteralPath $file -Raw -Encoding UTF8) -match 'PC から削除')
+
 Write-Host '保管庫キーと回復キーの作り直し（New-PwRecoveryKey）'
-function global:Read-Host { '' }   # 「控えたら Enter」
-$out = New-PwRecoveryKey -MasterPassword (S 'master-password-1') -Confirm:$false 6>&1 | Out-String
-$newKey = [regex]::Match($out, '([0-9A-Z]{4}-){7}[0-9A-Z]{4}').Value
-Remove-Item Function:\global:Read-Host
+$file = New-PwRecoveryKey -MasterPassword (S 'master-password-1') -Confirm:$false 6>$null
+$newKey = [regex]::Match((Get-Content -LiteralPath $file -Raw -Encoding UTF8), '([0-9A-Z]{4}-){7}[0-9A-Z]{4}').Value
 Check '保管庫を新しい保管庫キーで暗号化し直す' ($global:StorePw -ne $set.StorePassword -and $global:StorePw -eq (& $get 'master-password-1') -and $global:Unlocked -eq $global:StorePw)
 Check '新しい回復キーを表示し、それで開ける'   ($newKey -and $newKey -ne $set.RecoveryKey -and (& $rec $newKey) -eq $global:StorePw)
 $err = $null; try { & $rec $set.RecoveryKey } catch { $err = $_ }
