@@ -26,7 +26,7 @@ function Show-PwManager {
         $script:PinnedConfig = $cfg
         $ui = @{
             Cfg = $cfg; Form = $null; Suspend = $false; SelectName = $null
-            Table = $null; View = $null; NameProp = $null; ByName = @{}
+            List = (New-PwList $cfg)
             Font = New-Object System.Drawing.Font('Yu Gothic UI', 10)
             ClipSeq = $null; ClipHash = $null; ClipExpire = $null
             LastActivity = Get-Date; UnlockedAt = $null; Locking = $false
@@ -114,8 +114,7 @@ function Show-PwManager {
         [void]$grid.Columns.Add('__Updated', '更新日時');    $grid.Columns['__Updated'].FillWeight = 90
         foreach ($col in $grid.Columns) { $col.DataPropertyName = $col.Name }   # 列名 = DataTable の列名
         $grid.Columns['__Password'].SortMode = 'NotSortable'
-        Initialize-PwUiColumns $ui
-        Import-PwUiTable $ui @()   # 空の表で列を結び付けておく
+        $grid.DataSource = $ui.List.View
 
         $statusStrip = New-Object System.Windows.Forms.StatusStrip
         $ui.Status    = New-Object System.Windows.Forms.ToolStripStatusLabel -Property @{ Spring = $true; TextAlign = 'MiddleLeft' }

@@ -137,7 +137,7 @@ function Show-PwEditDialog($ui, $Entry) {
         $val = if ($Entry) { [string]$Entry.($f.Name) } else { '' }
         if ($f.Type -eq 'Category') {
             $c = New-PwControl ComboBox @{ Width = 440; DropDownStyle = 'DropDown' }
-            $c.Items.AddRange([object[]](Get-PwUiCategoryList $ui $f.Name))
+            $c.Items.AddRange([object[]](Get-PwListValues $ui.List $f.Name $cfg.Categories))
             $c.Text = $val
         } elseif ($f.Multiline) {
             $c = New-PwControl TextBox @{ Width = 440; Height = 90; Multiline = $true; ScrollBars = 'Vertical'; AcceptsReturn = $true; Text = $val }

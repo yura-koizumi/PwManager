@@ -102,7 +102,7 @@ function Lock-PwUi($ui) {
     if ($ui.Locking) { return }
     $ui.Locking = $true
     try {
-        Import-PwUiTable $ui @()
+        Set-PwUiListData $ui @()
         foreach ($p in $ui.Panels) { $p.Enabled = $false }
         Set-PwUiStatus $ui 'ロック中'
         if (Show-PwUnlockDialog $ui 'ロックしました。続けるにはマスターパスワードを入力してください。') {
