@@ -74,10 +74,10 @@ function New-PwEntry {
     .PARAMETER Generate
       パスワードを生成する（長さなどは設定の PasswordGenerator）。
     .EXAMPLE
-      New-PwEntry Amazon -Fields @{ ID = 'taro'; URL = 'https://www.amazon.co.jp' } -Generate
+      New-PwEntry 'Amazon' -Fields @{ ID = 'taro'; URL = 'https://www.amazon.co.jp' } -Generate
       # パスワードを生成して登録（Copy-PwField Amazon でコピーできる）
     .EXAMPLE
-      New-PwEntry 社内ポータル -Fields @{ Id = 'u001' }
+      New-PwEntry '社内ポータル' -Fields @{ Id = 'u001' }
       # パスワードは入力を求める
     #>
     [CmdletBinding(SupportsShouldProcess)]
@@ -119,12 +119,12 @@ function Set-PwEntry {
     .PARAMETER PromptPassword
       新しいパスワードの入力を求める。
     .EXAMPLE
-      Set-PwEntry Amazon -Fields @{ URL = 'https://www.amazon.com' }
+      Set-PwEntry 'Amazon' -Fields @{ URL = 'https://www.amazon.com' }
     .EXAMPLE
-      Set-PwEntry Amazon -Generate          # パスワードを生成し直す
-      Set-PwEntry Amazon -PromptPassword    # 新しいパスワードを入力する
+      Set-PwEntry 'Amazon' -Generate          # パスワードを生成し直す
+      Set-PwEntry 'Amazon' -PromptPassword    # 新しいパスワードを入力する
     .EXAMPLE
-      Get-PwEntry 旧システム | Set-PwEntry -Title '新システム'
+      Get-PwEntry '旧システム' | Set-PwEntry -Title '新システム'
     #>
     [CmdletBinding(SupportsShouldProcess, DefaultParameterSetName = 'Query')]
     param(

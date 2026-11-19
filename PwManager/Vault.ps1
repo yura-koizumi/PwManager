@@ -183,15 +183,17 @@ function Get-PwEntry {
     .PARAMETER Skip
       先頭から飛ばす件数（ページ送り）。
     .EXAMPLE
-      Get-PwEntry ポータル
+      Get-PwEntry 'ポータル'
     .EXAMPLE
-      Get-PwEntry url:example.com id:taro
+      Get-PwEntry '社内 ポータル'          # 空白で区切った語をすべて含むもの（空白を含むときは '...' で囲む）
+    .EXAMPLE
+      Get-PwEntry 'url:example.com id:taro'
     .EXAMPLE
       Get-PwEntry -Skip 50 -First 50          # 51〜100 件目
     .EXAMPLE
       Get-PwEntry -All | Sort-Object Updated -Descending | Select-Object -First 10   # 最近更新した 10 件
     .EXAMPLE
-      Get-PwEntry ポータル | Format-List *    # 全項目を表示
+      Get-PwEntry 'ポータル' | Format-List *    # 全項目を表示
     #>
     [CmdletBinding(SupportsPaging)]
     param([Parameter(Position = 0)][string]$Filter, [switch]$All)
@@ -315,9 +317,9 @@ function Remove-PwEntry {
     .PARAMETER Name
       対象の ID（pwm:…）。Get-PwEntry の結果をパイプで渡すと使われる。
     .EXAMPLE
-      Remove-PwEntry 旧システム
+      Remove-PwEntry '旧システム'
     .EXAMPLE
-      Get-PwEntry テスト | Remove-PwEntry     # 一致したものを 1 件ずつ確認して削除
+      Get-PwEntry 'テスト' | Remove-PwEntry   # 一致したものを 1 件ずつ確認して削除
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High', DefaultParameterSetName = 'Query')]
     param(

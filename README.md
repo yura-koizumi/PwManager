@@ -148,16 +148,35 @@ ZIP の中の保管庫データは暗号化されたままで、戻すには **�
 
 ---
 
-## 5. Excel からの移行
+## 5. ほかのツールからの移行・ほかのツールへの移行
+
+### ブラウザー・ほかのパスワード管理ツールから取り込む
+
+Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV は、そのまま取り込めます（列名から自動で判別します）。
+
+1. 元のツールで、パスワードを CSV に書き出します（Chrome なら 設定 →「Google パスワード マネージャー」→ 設定 →「パスワードをエクスポート」）。
+2. PwManager の画面を閉じ、PowerShell で次を実行します。
+
+   ```powershell
+   Import-PwCsv -Path 'C:\Users\<ユーザー名>\Downloads\Chrome パスワード.csv'
+   ```
+
+3. **取り込みが済んだら、CSV を削除し、ごみ箱も空にしてください。** 元のツールに残っているパスワードも、必要なければ削除します。
+
+- Firefox の CSV にはタイトルが無いので、URL のドメイン名（`example.com` など）をタイトルにします。
+- パスワードが空の行（Bitwarden のメモなど）は取り込みません。
+- 2 段階認証の鍵（`login_totp`・`OTPAuth`）やタグなど、入れる先の無い列があると、取りこぼさないよう止まります。要らなければ `-IgnoreUnknownColumns` を付けて実行します。
+
+### Excel から取り込む
 
 1. Excel の 1 行目（見出し）を `Title`, `Password`, `Id`, `Url`, `Note` にします（`Fields` に追加した項目も使えます）。日本語の見出し（タイトル、パスワード、および `Fields` の `Label`）でも構いません。
 2. 「名前を付けて保存」で **CSV UTF-8** を選んで保存します。
 3. PowerShell で次を実行します。
 
    ```powershell
-   Import-PwCsv -Path C:\work\passwords.csv
+   Import-PwCsv -Path 'C:\work\passwords.csv'
    # Excel の「CSV (コンマ区切り)」で保存した場合
-   Import-PwCsv -Path C:\work\passwords.csv -Encoding Default
+   Import-PwCsv -Path 'C:\work\passwords.csv' -Encoding Default
    ```
 
 4. **取り込みが済んだら、CSV と元の Excel ファイルを削除し、ごみ箱も空にしてください。**
@@ -166,10 +185,16 @@ ZIP の中の保管庫データは暗号化されたままで、戻すには **�
 
 同じ CSV を 2 回取り込むと、エントリが重複します。
 
-将来、会社が公式のパスワード管理ツールを導入した場合などに備えて、CSV に書き出すこともできます。
-`Export-PwCsv -Path out.csv -IncludePassword` を実行すると、パスワードを平文で含めて書き出します（確認画面が出ます）。
+### 書き出す
 
-Excel で開いたときに数式として実行されないよう、`=` `+` `-` `@` で始まるタイトルや項目の値には、先頭に `'` を付けて書き出します（`Import-PwCsv` で取り込むと元に戻ります）。パスワードは書き換えません。
+| 書き出し方 | 用途 |
+| --- | --- |
+| `Export-PwCsv -Path 'chrome.csv' -Format Chrome` | ブラウザー（Chrome・Edge・Firefox）や、Bitwarden・1Password などに取り込む。パスワードを必ず含みます |
+| `Export-PwCsv -Path 'out.csv' -IncludePassword` | Excel で開く・保管する。`-IncludePassword` を付けないと、パスワードを含めません |
+
+- どちらも、パスワードを含めるときは確認画面が出ます。**使い終わったら CSV を削除し、ごみ箱も空にしてください。**
+- 既定の形では、Excel で開いたときに数式として実行されないよう、`=` `+` `-` `@` で始まるタイトルや項目の値に `'` を付けます（`Import-PwCsv` で取り込むと元に戻ります）。
+- Chrome 形式では、取り込む側に `'` が残らないよう、値をそのまま書きます。Excel では開かないでください。
 
 ---
 
@@ -180,15 +205,15 @@ Excel で開いたときに数式として実行されないよう、`=` `+` `-`
 | コマンド | 内容 |
 | --- | --- |
 | `pwm` | 画面を開く |
-| `Get-PwEntry ポータル` | 検索する（1 件 1 行の表。パスワードは表示しない） |
-| `Copy-PwField ポータル` | パスワードをコピーする（`Copy-PwField ポータル Id` で ID、`-Previous` で変更前のパスワード） |
-| `New-PwEntry Amazon -Fields @{ ID = 'taro'; URL = 'https://…' } -Generate` | 登録する（`-Generate` でパスワードを生成。付けなければ入力を求める） |
-| `Set-PwEntry Amazon -Fields @{ URL = 'https://…' }` | 指定した項目だけ変える（`-Title` でタイトル、`-Generate` / `-PromptPassword` でパスワード） |
-| `Remove-PwEntry Amazon` | 削除する（確認あり） |
+| `Get-PwEntry 'ポータル'` | 検索する（1 件 1 行の表。パスワードは表示しない） |
+| `Copy-PwField 'ポータル'` | パスワードをコピーする（`Copy-PwField 'ポータル' Id` で ID、`-Previous` で変更前のパスワード） |
+| `New-PwEntry 'Amazon' -Fields @{ ID = 'taro'; URL = 'https://…' } -Generate` | 登録する（`-Generate` でパスワードを生成。付けなければ入力を求める） |
+| `Set-PwEntry 'Amazon' -Fields @{ URL = 'https://…' }` | 指定した項目だけ変える（`-Title` でタイトル、`-Generate` / `-PromptPassword` でパスワード） |
+| `Remove-PwEntry 'Amazon'` | 削除する（確認あり） |
 | `New-PwPassword -Length 24` | パスワードを生成する |
 | `Edit-PwConfig` | 設定ファイルを開く |
 | `Backup-PwVault` / `Restore-PwVault` | バックアップ・復元 |
-| `Import-PwCsv` / `Export-PwCsv` | CSV の取り込み・書き出し |
+| `Import-PwCsv` / `Export-PwCsv` | CSV の取り込み・書き出し（ブラウザーやほかのツールの CSV も。`-Format Chrome` でブラウザー向けに書き出す） |
 | `Set-PwMasterPassword` | マスターパスワードを変更する（`-UseRecoveryKey` で、忘れたときに回復キーで変更） |
 | `New-PwRecoveryKey` | 保管庫の鍵と回復キーを作り直す |
 | `Get-PwHelp` | コマンドの一覧 |
@@ -196,8 +221,8 @@ Excel で開いたときに数式として実行されないよう、`=` `+` `-`
 ### 検索と件数
 
 ```powershell
-Get-PwEntry ポータル 管理           # 空白で区切ると、すべての語を含むもの
-Get-PwEntry url:example id:taro     # 「項目:文字」で、その項目だけを探す（項目名は ID・URL・title など）
+Get-PwEntry '社内 ポータル'          # 空白で区切ると、すべての語を含むもの
+Get-PwEntry 'url:example id:taro'   # 「項目:文字」で、その項目だけを探す（項目名は ID・URL・title など）
 Get-PwEntry                         # 既定では 50 件まで。残りがあれば件数を知らせる
 Get-PwEntry -All                    # 全件
 Get-PwEntry -Skip 50 -First 50      # 51〜100 件目
@@ -207,14 +232,15 @@ Get-PwEntry -Skip 50 -First 50      # 51〜100 件目
 
 ```powershell
 Get-PwEntry -All | Sort-Object Updated -Descending | Select-Object -First 10   # 最近更新した 10 件
-Get-PwEntry ポータル | Format-List *                                          # 全項目を表示
+Get-PwEntry 'ポータル' | Format-List *                                       # 全項目を表示
 Get-PwEntry -All | Out-GridView                                              # 表の画面で見る
 ```
 
 ### 注意
 
+- 検索語やタイトルは `'...'`（シングルクォート）で囲みます。空白や記号（`$` `&` `;` など）を含むと、PowerShell が別の意味に読むためです。`"..."` の中では `$` が変数として展開されるので、`'...'` を使ってください（英数字だけなら囲わなくても構いません）。
 - パスワードは引数に平文で書かず、`-Generate` で生成するか、入力欄に入力します（コマンドの履歴に残さないため）。
-- `Get-PwEntry 旧 | Remove-PwEntry` のように、検索結果をパイプで渡すこともできます。`Copy-PwField` などに検索語を渡して複数のエントリが当てはまるときは、選ぶ画面が出ます（件数は区切りません）。
+- `Get-PwEntry '旧' | Remove-PwEntry` のように、検索結果をパイプで渡すこともできます。`Copy-PwField` などに検索語を渡して複数のエントリが当てはまるときは、選ぶ画面が出ます（件数は区切りません）。
 - 保管庫に書き込むコマンド（登録・編集・削除・CSV の取り込み・マスターパスワードの変更）は、PwManager の画面を閉じてから実行します。
 - 保管庫がロックされているときは、マスターパスワードを尋ねます（3 回まで）。
 

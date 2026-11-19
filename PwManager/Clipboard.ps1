@@ -89,10 +89,10 @@ function Copy-PwField {
     .PARAMETER Previous
       変更前のパスワードをコピーする（パスワードを変えたとき、1 つ前のものだけ残している）。
     .EXAMPLE
-      Copy-PwField 社内ポータル -Previous  # 変更前のパスワードをコピー
+      Copy-PwField '社内ポータル' -Previous   # 変更前のパスワードをコピー
     .EXAMPLE
-      Copy-PwField 社内ポータル            # パスワードをコピー
-      Copy-PwField 社内ポータル Id         # ID をコピー
+      Copy-PwField '社内ポータル'          # パスワードをコピー
+      Copy-PwField '社内ポータル' Id       # ID をコピー
     #>
     [CmdletBinding()]
     param(
