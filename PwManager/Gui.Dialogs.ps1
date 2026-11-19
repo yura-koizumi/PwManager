@@ -1,8 +1,6 @@
 ﻿# Gui.Dialogs.ps1 - 画面の共通部品とダイアログ（ロック解除・登録/編集）
 # （PwManager.psm1 から読み込まれる）
 
-
-
 function New-PwControl([string]$Type, [hashtable]$Property = @{}) {
     New-Object -TypeName "System.Windows.Forms.$Type" -Property $Property
 }
@@ -59,8 +57,6 @@ function Set-PwUiStatus($ui, [string]$Text, [switch]$Warn) {
     $ui.Status.Text = $Text
     $ui.Status.ForeColor = if ($Warn) { [System.Drawing.Color]::DarkOrange } else { [System.Drawing.SystemColors]::ControlText }
 }
-
-
 
 function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワードを入力してください。') {
     $dlg = New-PwControl Form @{

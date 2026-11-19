@@ -1,7 +1,6 @@
 ﻿# Config.ps1 - 設定・状態・監査ログ
 # （PwManager.psm1 から読み込まれる）
 
-
 function Initialize-PwDataDir {
     if (-not (Test-Path -LiteralPath $script:DataDir)) {
         New-Item -ItemType Directory -Path $script:DataDir -Force | Out-Null

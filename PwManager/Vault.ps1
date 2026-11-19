@@ -1,7 +1,6 @@
 ﻿# Vault.ps1 - 保管庫の操作（SecretManagement / SecretStore）
 # （PwManager.psm1 から読み込まれる）
 
-
 function Test-PwLockedError($ErrorRecord) {
     $e = $ErrorRecord.Exception
     while ($e) {

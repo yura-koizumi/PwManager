@@ -1,7 +1,6 @@
 ﻿# Clipboard.ps1 - クリップボード
 # （PwManager.psm1 から読み込まれる）
 
-
 function Get-PwTextHash([string]$Text) {
     $sha = [Security.Cryptography.SHA256]::Create()
     try { [BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($Text))) }

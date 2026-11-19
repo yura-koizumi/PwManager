@@ -1,7 +1,6 @@
 ﻿# Gui.Actions.ps1 - 画面の操作（コピー・登録・編集・削除・バックアップ・ロック）
 # （PwManager.psm1 から読み込まれる）
 
-
 function Set-PwUiClipboard($ui, [string]$Text, [bool]$Sensitive, [string]$What) {
     $seq = Set-PwClipboard -Text $Text -Sensitive:$Sensitive
     $sec = [int]$ui.Cfg.ClipboardClearSeconds
@@ -103,6 +102,7 @@ function Lock-PwUi($ui) {
     $ui.Locking = $true
     try {
         Set-PwUiListData $ui @()
+        $ui.Count.Text = ''
         foreach ($p in $ui.Panels) { $p.Enabled = $false }
         Set-PwUiStatus $ui 'ロック中'
         if (Show-PwUnlockDialog $ui 'ロックしました。続けるにはマスターパスワードを入力してください。') {

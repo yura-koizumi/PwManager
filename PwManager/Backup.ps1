@@ -1,7 +1,6 @@
 ﻿# Backup.ps1 - バックアップ・復元
 # （PwManager.psm1 から読み込まれる）
 
-
 function Backup-PwVault {
     <#
     .SYNOPSIS

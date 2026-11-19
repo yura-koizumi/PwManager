@@ -1,7 +1,6 @@
 ﻿# Csv.ps1 - CSV の取り込み・書き出し（Excel からの移行）
 # （PwManager.psm1 から読み込まれる）
 
-
 # Excel で開いたとき数式として実行されないよう、= + - @ タブ CR で始まる値の先頭に ' を付ける。
 # パスワードは値を変えないため対象外。Import-PwCsv は付けた ' を取り除く。
 $script:CsvFormulaPattern = "^[=+\-@`t`r]"

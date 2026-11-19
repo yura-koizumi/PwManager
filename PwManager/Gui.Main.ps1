@@ -151,14 +151,14 @@ function Show-PwManager {
 
         # ---- イベント ----
         # 操作ありの記録は Register-PwActivity（キー入力・クリック）でまとめて行う
-        $search.Add_TextChanged({ Update-PwGrid $ui })
+        $search.Add_TextChanged({ Invoke-PwUi $ui { Update-PwGrid $ui } })
         $search.Add_KeyDown({
             param($s, $e)
             if ($e.KeyCode -eq 'Enter') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Copy-PwUiPassword $ui } }
             elseif ($e.KeyCode -eq 'Down' -and $grid.Rows.Count -gt 0) { $e.SuppressKeyPress = $true; [void]$grid.Focus() }
             elseif ($e.KeyCode -eq 'Escape') { $e.SuppressKeyPress = $true; $search.Clear() }
         })
-        $catBox.Add_SelectedIndexChanged({ Update-PwGrid $ui })
+        $catBox.Add_SelectedIndexChanged({ Invoke-PwUi $ui { Update-PwGrid $ui } })
 
         $grid.Add_KeyDown({
             param($s, $e)

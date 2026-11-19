@@ -1,7 +1,6 @@
 ﻿# Setup.ps1 - 初期設定とショートカット
 # （PwManager.psm1 から読み込まれる）
 
-
 function Initialize-PwManager {
     <# 設定ファイル作成・保管庫登録・（初回のみ）マスターパスワード設定 #>
     [CmdletBinding()] param()
