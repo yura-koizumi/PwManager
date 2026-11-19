@@ -38,22 +38,26 @@ $empty1 = New-Object System.Security.SecureString; $empty2 = New-Object System.S
 Check '空どうしは一致、空と空でないものは不一致' ((& $eq $empty1 $empty2) -and -not (& $eq $empty1 (S 'a')))
 
 Write-Host 'マスターパスワードの変更（Set-PwMasterPassword）'
+$pwFiles = { @(Get-ChildItem -LiteralPath $dataDir -Filter 'pre-pwchange-*.zip' -ErrorAction SilentlyContinue) }
 $err = $null
 try { Set-PwMasterPassword -Current (S 'wrong-password-1') -New (S 'new-password-123') -Confirm:$false } catch { $err = $_ }
 Check '今のパスワードが違えば止まる' ($null -ne $err -and $err.Exception.Message -match '今のパスワード' -and $global:StorePassword -eq 'old-password-123')
+Check '変更できなかったときは、一時ファイルを残さない' ((& $pwFiles).Count -eq 0)
 $err = $null
 try { Set-PwMasterPassword -Current (S 'old-password-123') -New (S 'short') -Confirm:$false } catch { $err = $_ }
 Check '条件を満たさない新しいパスワードは止まる' ($null -ne $err -and $global:StorePassword -eq 'old-password-123')
 
-Remove-Item -LiteralPath (Join-Path $dataDir 'pre-pwchange-*.zip') -ErrorAction SilentlyContinue
+New-Item -ItemType File -Path (Join-Path $dataDir 'pre-pwchange-20200101-000000-000.zip') -Force | Out-Null   # 以前の変更で残ったもの
 $global:Calls.Clear()
 $r = Set-PwMasterPassword -Current (S 'old-password-123') -New (S 'new-password-123') -Confirm:$false
 Check '新しいパスワードに変わる'           ($global:StorePassword -eq 'new-password-123')
 Check '変更後、新しいパスワードで解除する' (($global:Calls -join ',') -eq 'set,unlock:new-password-123')
-Check '変更前の保管庫を退避する'           ($r.SafetyCopy -and (Test-Path -LiteralPath $r.SafetyCopy) -and (Split-Path $r.SafetyCopy -Leaf) -like 'pre-pwchange-*.zip')
+Check '古いパスワードで開ける一時ファイルは、以前のものも含めて消す' ($null -eq $r.SafetyCopy -and (& $pwFiles).Count -eq 0)
 Check '監査ログに残す（パスワードは書かない）' ((Get-Content -LiteralPath $audit -Raw -Encoding UTF8) -match 'MASTERPW' -and (Get-Content -LiteralPath $audit -Raw) -notmatch 'password-123')
 
-$r = Set-PwMasterPassword -Current (S 'new-password-123') -New (S 'third-password-1') -Confirm:$false
+$r = Set-PwMasterPassword -Current (S 'new-password-123') -New (S 'third-password-1') -KeepSafetyCopy -Confirm:$false
+Check '-KeepSafetyCopy なら一時ファイルを残す' ($r.SafetyCopy -and (Test-Path -LiteralPath $r.SafetyCopy) -and (& $pwFiles).Count -eq 1)
+
 
 Write-Host '画面が開いているとき'
 $mutex = New-Object System.Threading.Mutex($true, 'Local\PwManager-GUI')

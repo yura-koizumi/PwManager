@@ -30,6 +30,66 @@ function Unlock-PwVault([securestring]$Password) {
     Unlock-SecretStore -Password $Password -PasswordTimeout ([int]$cfg.UnlockTimeoutSeconds)
 }
 
+#region ロック解除の失敗（総当たり対策）
+# 画面からのロック解除に続けて失敗すると、次に試せるまでの待ち時間を延ばす（ふだんの打ち間違いでは待たない）。
+# 回数と最後の日時を %APPDATA%\PwManager\unlock.json に残し、次に正しく開いたときに本人へ知らせる。
+# ※ 保管庫ファイルを直接狙う攻撃（オフライン攻撃）はこれでは防げない。そちらはマスターパスワードの強さで守る。
+
+$script:UnlockFailPath  = Join-Path $script:DataDir 'unlock.json'
+$script:UnlockFreeTries = 4      # この回数までは待たない
+$script:UnlockMaxWait   = 300    # 待ち時間の上限（秒）
+
+function Get-PwUnlockFailures {
+    # @{ Count = 連続して失敗した回数; Last = 最後に失敗した日時（無ければ $null） }
+    $r = @{ Count = 0; Last = $null }
+    if (Test-Path -LiteralPath $script:UnlockFailPath) {
+        try {
+            $j = Read-PwJson $script:UnlockFailPath
+            $r.Count = [int]$j.Count
+            $r.Last = [datetime]::ParseExact([string]$j.Last, $script:DateFormat, [Globalization.CultureInfo]::InvariantCulture)
+        } catch { }
+    }
+    $r
+}
+
+function Get-PwUnlockWait([int]$Count) {
+    # 連続 $Count 回失敗したあと、次に試せるまでの秒数（5 回目から 5, 10, 20, … 秒、上限 5 分）
+    if ($Count -le $script:UnlockFreeTries) { return 0 }
+    [int][Math]::Min($script:UnlockMaxWait, 5 * [Math]::Pow(2, $Count - $script:UnlockFreeTries - 1))
+}
+
+function Get-PwUnlockRemaining {
+    # 次に試せるまでの残り秒数（0 ならすぐ試せる）
+    $f = Get-PwUnlockFailures
+    if (-not $f.Last) { return 0 }
+    $left = (Get-PwUnlockWait $f.Count) - ((Get-Date) - $f.Last).TotalSeconds
+    [int][Math]::Max(0, [Math]::Ceiling($left))
+}
+
+function Invoke-PwUnlock([securestring]$Password) {
+    <# 待ち時間を守ってロック解除する。失敗すれば回数を増やして例外を投げ直す。
+       成功すれば回数を 0 に戻し、それまでの失敗（@{ Count; Last }）を返す。 #>
+    $left = Get-PwUnlockRemaining
+    if ($left -gt 0) { throw "パスワードの入力に続けて失敗したため、あと $left 秒待ってから入力してください。" }
+    $before = Get-PwUnlockFailures
+    try {
+        Unlock-PwVault $Password
+    } catch {
+        $n = $before.Count + 1
+        Initialize-PwDataDir
+        @{ Count = $n; Last = (Get-Date -Format $script:DateFormat) } | ConvertTo-Json | Set-Content -LiteralPath $script:UnlockFailPath -Encoding UTF8
+        Write-PwAudit 'UNLOCK-FAIL' "連続 $n 回目"
+        throw
+    }
+    if ($before.Count -gt 0) {
+        Remove-Item -LiteralPath $script:UnlockFailPath -Force -ErrorAction SilentlyContinue
+        Write-PwAudit 'UNLOCK' "それまでに $($before.Count) 回失敗"
+    }
+    $before
+}
+
+#endregion
+
 function Get-PwSecretInfo([string]$Name) {
     <# 保管庫のエントリ情報（SecretInfo）を並べ替えずに返す。-Name を指定するとその 1 件だけ。画面からも使う。 #>
     $cfg = Get-PwConfig
@@ -126,7 +186,7 @@ function Save-PwEntry {
     }
 
     $action = if ($isNew) { 'ADD' } elseif ($pwChanged) { 'UPDATE+PW' } else { 'UPDATE' }
-    Write-PwAudit $action "$($meta['Title']) [$Name]"
+    Write-PwAudit $action "[$Name]"   # タイトルは書かない（ログは暗号化されないため、使っているサービスが分からないように）
     $Name
 }
 
@@ -157,7 +217,7 @@ function Remove-PwEntry {
         $title = if ($m -and $m.ContainsKey('Title')) { [string]$m['Title'] } else { $Name }
         if ($PSCmdlet.ShouldProcess($title, '削除')) {
             Remove-Secret -Vault $cfg.VaultName -Name $Name
-            Write-PwAudit 'DELETE' "$title [$Name]"
+            Write-PwAudit 'DELETE' "[$Name]"
         }
     }
 }
@@ -212,12 +272,14 @@ function Set-PwMasterPassword {
     .SYNOPSIS
       マスターパスワードを変更する。保存済みのデータは、新しいパスワードで暗号化し直される。
     .DESCRIPTION
-      変更前の保管庫を %APPDATA%\PwManager\pre-pwchange-*.zip に退避する（開くには変更前のパスワードが必要）。
-      それまでに取ったバックアップも、開くには変更前のパスワードが必要。
+      変更の間だけ、変更前の保管庫を %APPDATA%\PwManager\pre-pwchange-*.zip に退避する。
+      新しいパスワードで開けることを確かめたら、退避ファイル（古いパスワードで開けるもの）は削除する。
+      古いパスワードが漏れた場合に、そこから中身を読まれないようにするため。残したいときは -KeepSafetyCopy を付ける。
+      それまでに手で取ったバックアップは消さない（開くには変更前のパスワードが必要）。
       PwManager の画面が別に開いているときは実行できない（画面の ≡ →「マスターパスワードの変更」を使うこと）。
     #>
     [CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
-    param([securestring]$Current, [securestring]$New)
+    param([securestring]$Current, [securestring]$New, [switch]$KeepSafetyCopy)
     Assert-PwGuiClosed
     if (-not $Current) { $Current = Read-Host '今のマスターパスワード' -AsSecureString }
     if ($New) {
@@ -231,9 +293,20 @@ function Set-PwMasterPassword {
 
     $safety = Save-PwVaultSafetyCopy 'pre-pwchange'
     try { Set-SecretStorePassword -Password $Current -NewPassword $New }
-    catch { throw "マスターパスワードを変更できませんでした（今のパスワードが違う可能性があります）。`n$($_.Exception.Message)" }
-    Unlock-PwVault $New
+    catch {
+        # 変わっていないので、退避ファイルは今の保管庫と同じ。残す意味がないので消す
+        if ($safety) { Remove-Item -LiteralPath $safety -Force -ErrorAction SilentlyContinue }
+        throw "マスターパスワードを変更できませんでした（今のパスワードが違う可能性があります）。`n$($_.Exception.Message)"
+    }
+    try { Unlock-PwVault $New }
+    catch { throw "変更しましたが、新しいパスワードで開けませんでした。変更前の保管庫を残してあります: $safety`n$($_.Exception.Message)" }
     Write-PwAudit 'MASTERPW' '変更'
+
+    if (-not $KeepSafetyCopy) {
+        # 新しいパスワードで開けたので、古いパスワードで開ける退避ファイルは（以前のものも含めて）消す
+        Get-ChildItem -LiteralPath $script:DataDir -Filter 'pre-pwchange-*.zip' -ErrorAction SilentlyContinue | Remove-Item -Force
+        $safety = $null
+    }
     [pscustomobject]@{ SafetyCopy = $safety }
 }
 

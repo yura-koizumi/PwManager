@@ -77,14 +77,23 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
     $dlg.AcceptButton = $ok
     $dlg.CancelButton = $cancel
 
-    $state = @{ Ok = $false; Tries = 0 }
+    # この画面を開く前の失敗（本人以外が試した可能性がある）。この画面での打ち間違いは含めない
+    $prior = Get-PwUnlockFailures
+    $state = @{ Ok = $false; Tries = 0; Prior = $prior.Count; Last = $prior.Last }
     $ok.Add_Click({
         if (-not $tb.Text) { return }
+        $left = Get-PwUnlockRemaining
+        if ($left -gt 0) {
+            # 続けて失敗したあとの待ち時間中は、試さない（回数も増やさない）
+            $tb.Clear()
+            $err.Text = "パスワードの入力に続けて失敗したため、あと $left 秒待ってから入力してください。"
+            return
+        }
         $sec = ConvertTo-SecureString $tb.Text -AsPlainText -Force
         $tb.Clear()
         $dlg.UseWaitCursor = $true
         try {
-            Unlock-PwVault $sec
+            [void](Invoke-PwUnlock $sec)
             $state.Ok = $true
             $ui.UnlockedAt = Get-Date
             $ui.LastActivity = Get-Date
@@ -104,6 +113,12 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
         $dlg.StartPosition = 'CenterScreen'; [void]$dlg.ShowDialog()
     }
     $dlg.Dispose()
+    if ($state.Ok -and $state.Prior -gt 0) {
+        $when = if ($state.Last) { $state.Last.ToString('yyyy/MM/dd HH:mm') } else { '不明' }
+        $text = ("前回正しく開いてから、マスターパスワードの入力に {0} 回失敗しています（最後: {1}）。`n" +
+                 "心当たりがなければ、≡ →「マスターパスワードの変更」で変更することを検討してください。") -f $state.Prior, $when
+        Show-PwMessage $text 'Warn'
+    }
     $state.Ok
 }
 

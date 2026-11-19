@@ -37,7 +37,7 @@ Check '検索語で削除する' (-not (Meta 'Amazon') -and $global:Store.Count 
 Get-PwEntry GitHub | Remove-PwEntry -Confirm:$false
 Check 'パイプラインで渡したエントリを削除する' ($global:Store.Count -eq 0)
 $audit = Get-Content -LiteralPath (Join-Path $env:APPDATA 'PwManager\audit.log') -Raw -Encoding UTF8
-Check '監査ログに残す（パスワードは書かない）' ($audit -match 'ADD' -and $audit -match 'DELETE' -and $audit -notmatch 'p@ss-1' -and $audit -notmatch [regex]::Escape($gp))
+Check '監査ログに残す（パスワードもタイトルも書かない）' ($audit -notmatch 'Amazon' -and $audit -notmatch 'GitHub' -and $audit -match 'ADD' -and $audit -match 'DELETE' -and $audit -notmatch 'p@ss-1' -and $audit -notmatch [regex]::Escape($gp))
 
 Write-Host '画面が開いているとき'
 $mutex = New-Object System.Threading.Mutex($true, 'Local\PwManager-GUI')
