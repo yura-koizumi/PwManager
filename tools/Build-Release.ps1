@@ -57,19 +57,55 @@ if ($unexpected) { throw "想定外のファイルが含まれています: $($u
 Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $out).FullName -DestinationPath $zip -CompressionLevel Optimal
 
 # Windows Sandbox の設定（ホストのフォルダーは読み取り専用で割り当てるため、Sandbox から書き換えられない）
+#   軽くするため、メモリーを 2 GB にし、マイク・カメラ・プリンターは使わない。
+#   ネットワーク（初回のモジュール導入に必要）とクリップボード（結果を貼り付けるため）は使う。
+#   Windows 11 の Sandbox にはメモ帳が無いため、ホストの従来のメモ帳を C:\Tools に割り当て、PATH と .txt に登録する
 $wsb = Join-Path $releaseDir 'PwManager-Sandbox.wsb'
 $sandboxFolder = 'C:\Users\WDAGUtilityAccount\Desktop\PwManager'
+$tools = Join-Path $releaseDir 'sandbox-tools'
+if (Test-Path -LiteralPath $tools) { Remove-Item -LiteralPath $tools -Recurse -Force }
+New-Item -ItemType Directory -Path $tools | Out-Null
+$sys = Join-Path $env:SystemRoot 'System32'
+if (Test-Path -LiteralPath (Join-Path $sys 'notepad.exe')) {
+    Copy-Item -LiteralPath (Join-Path $sys 'notepad.exe') -Destination $tools
+    foreach ($lang in 'ja-JP', 'en-US') {
+        $mui = Join-Path $sys "$lang\notepad.exe.mui"
+        if (Test-Path -LiteralPath $mui) {
+            New-Item -ItemType Directory -Path (Join-Path $tools $lang) -Force | Out-Null
+            Copy-Item -LiteralPath $mui -Destination (Join-Path $tools $lang)
+        }
+    }
+}
+@(
+    '@echo off'
+    'rem Run at Sandbox logon: make Notepad available, then open the PwManager folder'
+    'if exist C:\Tools\notepad.exe ('
+    '  setx PATH "C:\Tools" >nul'
+    '  assoc .txt=txtfile >nul 2>&1'
+    '  ftype txtfile="C:\Tools\notepad.exe" "%%1" >nul 2>&1'
+    ')'
+    "start `"`" explorer.exe $sandboxFolder"
+) -join "`r`n" | Set-Content -LiteralPath (Join-Path $tools 'setup.cmd') -Encoding ASCII
 @"
 <Configuration>
+  <MemoryInMB>2048</MemoryInMB>
+  <AudioInput>Disable</AudioInput>
+  <VideoInput>Disable</VideoInput>
+  <PrinterRedirection>Disable</PrinterRedirection>
   <MappedFolders>
     <MappedFolder>
       <HostFolder>$([Security.SecurityElement]::Escape($out))</HostFolder>
       <SandboxFolder>$sandboxFolder</SandboxFolder>
       <ReadOnly>true</ReadOnly>
     </MappedFolder>
+    <MappedFolder>
+      <HostFolder>$([Security.SecurityElement]::Escape($tools))</HostFolder>
+      <SandboxFolder>C:\Tools</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
   </MappedFolders>
   <LogonCommand>
-    <Command>explorer.exe $sandboxFolder</Command>
+    <Command>C:\Tools\setup.cmd</Command>
   </LogonCommand>
 </Configuration>
 "@ | Set-Content -LiteralPath $wsb -Encoding UTF8
