@@ -47,9 +47,21 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'テストが失敗したため、リリースを作りませんでした。' }
 }
 
+# -Bump で版を上げたあとに失敗したら、psd1 と CHANGELOG.md を元に戻す（やり直すとき「次の版」が空で止まらないように）
+$bumpBackup = $null
+trap {
+    if ($bumpBackup) {
+        [IO.File]::WriteAllText($psdPath, $bumpBackup.Psd, (New-Object Text.UTF8Encoding $true))
+        [IO.File]::WriteAllText($changelogPath, $bumpBackup.Changelog, (New-Object Text.UTF8Encoding $false))
+        Write-Host 'リリースを作れなかったので、版と CHANGELOG.md を元に戻しました。' -ForegroundColor Yellow
+    }
+    break
+}
+
 if ($Bump) {
     # 最後の番号を 1 つ上げる（psd1 は BOM 付きのまま書き戻す）
     $psdText = [IO.File]::ReadAllText($psdPath)
+    $bumpBackup = @{ Psd = $psdText; Changelog = $changelog }
     $vm = [regex]::Match($psdText, "ModuleVersion\s*=\s*'(\d+)\.(\d+)\.(\d+)'")
     if (-not $vm.Success) { throw 'PwManager.psd1 の ModuleVersion が読めません。' }
     $newVersion = '{0}.{1}.{2}' -f $vm.Groups[1].Value, $vm.Groups[2].Value, ([int]$vm.Groups[3].Value + 1)

@@ -43,7 +43,7 @@ if ([System.Threading.Mutex]::TryOpenExisting('Local\PwManager-GUI', [ref]$m)) {
 # --- 2. 実行ポリシー（自分のPCで作ったスクリプトを実行できるようにする） --------------------
 $cu = Get-ExecutionPolicy -Scope CurrentUser
 $lm = Get-ExecutionPolicy -Scope LocalMachine
-$gpo = @('MachinePolicy', 'UserPolicy' | ForEach-Object { Get-ExecutionPolicy -Scope $_ }) | Where-Object { $_ -ne 'Undefined' }
+$gpo = @(@('MachinePolicy', 'UserPolicy' | ForEach-Object { Get-ExecutionPolicy -Scope $_ }) | Where-Object { $_ -ne 'Undefined' })   # 1 つだけでも配列にする（$gpo[0] が 1 文字目にならないように）
 if ($gpo) {
     Write-Host "[2/4] 実行ポリシーはグループポリシーで管理されています（$($gpo -join ', ')）。変更しません。"
     if ($gpo[0] -in 'Restricted', 'AllSigned') {
