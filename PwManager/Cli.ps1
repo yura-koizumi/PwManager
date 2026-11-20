@@ -55,8 +55,7 @@ function Read-PwEntryPassword {
 
 function Get-PwNewSecret([securestring]$Password, [switch]$Generate, [switch]$Prompt) {
     # -Password / -Generate / 入力 のどれかでパスワードを決める（どれも無ければ $null）
-    if ($Generate -and $Password) { throw '-Password と -Generate は同時に指定できません。' }
-    if ($Password -and $Password.Length -eq 0) { throw '-Password が空です。' }
+    if ($Generate -and $Password) { throw '-Password と -Generate は同時に指定できません。' }    if ($Password -and $Password.Length -eq 0) { throw '-Password が空です。' }
     if ($Generate) { return New-PwPassword -AsSecureString }
     if ($Password) { return $Password }
     if ($Prompt) { return Read-PwEntryPassword }
@@ -98,6 +97,9 @@ function New-PwEntry {
     Assert-PwGuiClosed
     if (-not $Title.Trim()) { throw 'タイトルを入力してください。' }
     $values = ConvertTo-PwFieldValues $Fields
+    # パスワードを入力してもらう前に保管庫を開いておく（ロックされていれば、ここでマスターパスワードを尋ねる。
+    # 入力したあとで「待ってから」と断られて、入力が無駄にならないように）
+    [void](Get-PwSecretInfo "$($script:SecretPrefix)-")
     $secret = Get-PwNewSecret -Password $Password -Generate:$Generate -Prompt
     if (-not $PSCmdlet.ShouldProcess($Title, '登録')) { return }
     $name = Save-PwEntry -Title $Title -Fields $values -Password $secret
@@ -151,6 +153,7 @@ function Set-PwEntry {
         $newTitle = if ($PSBoundParameters.ContainsKey('Title')) { $Title } else { $entry.Title }
         if (-not $newTitle.Trim()) { throw 'タイトルを空にはできません。' }
         $values = ConvertTo-PwFieldValues $Fields
+        if ($PromptPassword -and ($Generate -or $Password)) { throw '-PromptPassword は、-Generate・-Password と同時に指定できません。' }
         $secret = Get-PwNewSecret -Password $Password -Generate:$Generate -Prompt:$PromptPassword
         if (-not $PSBoundParameters.ContainsKey('Title') -and $values.Count -eq 0 -and -not $secret) {
             Write-Warning '変更する内容がありません（-Title / -Fields / -Generate / -PromptPassword / -Password のどれかを指定します）。'

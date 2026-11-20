@@ -247,7 +247,10 @@ function New-PwRecoveryKey {
     param([securestring]$MasterPassword)
     Assert-PwGuiClosed
     if (-not $MasterPassword) { $MasterPassword = Read-Host 'マスターパスワード' -AsSecureString }
-    $old = (Get-PwVaultKeyChecked $MasterPassword).Key   # ロック解除と同じく、続けて間違えると待ち時間が延びる（Vault.ps1）
+    $checked = Get-PwVaultKeyChecked $MasterPassword   # ロック解除と同じく、続けて間違えると待ち時間が延びる（Vault.ps1）
+    $old = $checked.Key
+    Write-PwPriorFailures $checked.Before   # 正しいマスターパスワードを確かめられたので、それまでの失敗を知らせて回数を戻す
+    Reset-PwUnlockFailures $checked.Before
     if (-not $PSCmdlet.ShouldProcess('保管庫キーと回復キー', '作り直し')) { Clear-PwBytes $old; return }
     $oldPw = ConvertTo-PwStorePassword $old
     $oldFile = Get-Content -LiteralPath $script:KeyPath -Raw -Encoding UTF8

@@ -31,7 +31,8 @@ function Get-PwHelp {
         $pattern = '*' + [WildcardPattern]::Escape($Name) + '*'
         $cmd = @($script:HelpGroups.Values | ForEach-Object { $_ } | Where-Object { $_ -like $pattern })
         $exact = @($cmd | Where-Object { $_ -eq $Name }); if ($exact.Count -eq 1) { $cmd = $exact }
-        if ($cmd.Count -ne 1) { throw "「$Name」に当たるコマンドが $($cmd.Count) 件です: $($cmd -join ', ')" }
+        if ($cmd.Count -eq 0) { throw "「$Name」に当たるコマンドはありません。一覧は Get-PwHelp で表示します。" }
+        if ($cmd.Count -gt 1) { throw "「$Name」に当たるコマンドが $($cmd.Count) 件あります: $($cmd -join ', ')" }
         return Get-Help $cmd[0] -Detailed   # 概要・引数の説明・例
     }
     Write-Host 'PwManager のコマンド（詳しい使い方と例は Get-PwHelp <コマンド>、または Get-Help <コマンド> -Full）' -ForegroundColor Cyan

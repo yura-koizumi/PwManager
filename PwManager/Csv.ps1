@@ -76,6 +76,10 @@ function Import-PwCsv {
                "その列を取り込まなくてよければ -IgnoreUnknownColumns を付けて実行してください。") -f ($unknown -join ', ')
     }
     if ($rows.Count -eq 0) { Write-Warning 'この CSV には取り込める行がありません（空か、見出しの行だけです）。'; return }
+    if (-not @($rows[0].PSObject.Properties.Name | Where-Object { $script:CsvPasswordColumns -contains $_ })) {
+        Write-Warning "この CSV にはパスワードの列がありません（$($script:CsvPasswordColumns -join ' / ')）。パスワードなしで書き出した CSV は取り込めません。"
+        return
+    }
     $r = Import-PwCsvRows $rows $cfg $Path
     Write-Host "$($r.Ok) 件を取り込みました。（タイトルかパスワードが空でスキップ: $($r.Skip) 件）" -ForegroundColor Green
     Write-Warning '取り込みが済んだら、元の CSV ファイルは削除し、ごみ箱も空にしてください（パスワードが平文で残っています）。'
@@ -199,6 +203,8 @@ function Export-PwCsv {
       = + - @ で始まる値には先頭に ' を付ける（Import-PwCsv で元に戻る）。-IncludePassword を付けるとパスワードを平文で含める。
       -Format Chrome は、Chrome・Edge・Firefox・Bitwarden・1Password などが取り込める形（name,url,username,password,note）で、
       パスワードを必ず含める。値はそのまま書く（取り込む側に ' が残らないように）ので、Excel では開かないこと。
+      Chrome 形式に入るのは、タイトル・URL・ID・備考・パスワードだけ（自分で足した項目は入らない）。
+      既定の形では、秘密にする項目（設定の Sensitive）も、-IncludePassword のときだけ書き出す。
       パスワードを含めるときは確認してから書き出す。使い終わったら CSV は削除し、ごみ箱も空にすること。
     .PARAMETER Path
       書き出す CSV ファイル。
@@ -225,7 +231,11 @@ function Export-PwCsv {
     foreach ($f in @($cfg.Fields)) { $has[$f.Name] = $true }
     # パスワードは SecureString のまま行に入れ、Write-PwCsvFile が書く直前に平文に戻す
     $columns = if ($chrome) { 'name', 'url', 'username', 'password', 'note' }
-               else { @('Title') + @(if ($IncludePassword) { 'Password' }) + @($cfg.Fields | ForEach-Object Name) + @('Updated') }
+               else {
+                   # 秘密にする項目（Sensitive）は、パスワードと同じく -IncludePassword のときだけ書き出す
+                   $fieldNames = @($cfg.Fields | Where-Object { $IncludePassword -or -not $_.Sensitive } | ForEach-Object Name)
+                   @('Title') + @(if ($IncludePassword) { 'Password' }) + $fieldNames + @('Updated')
+               }
     $rows = foreach ($e in @(Get-PwEntry -All)) {
         if ($chrome) {
             @{
@@ -238,7 +248,7 @@ function Export-PwCsv {
         } else {
             $h = @{ Title = Protect-PwCsvValue $e.Title; Updated = $e.Updated }
             if ($IncludePassword) { $h['Password'] = Get-PwPassword $e.Name }
-            foreach ($f in @($cfg.Fields)) { $h[$f.Name] = Protect-PwCsvValue $e.($f.Name) }
+            foreach ($n in $fieldNames) { $h[$n] = Protect-PwCsvValue $e.$n }
             $h
         }
     }

@@ -8,7 +8,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 
 ## 1. セットアップ（初回・アップデート共通）
 
-1. このフォルダー（`PwManager`）を PC の任意の場所に置きます。
+1. このフォルダー（`PwManager`）を PC の任意の場所に置きます。アンインストールにも使うので、消さずに残しておくか、ダウンロードした ZIP を取っておいてください。
 2. フォルダー内の `Install.bat` をダブルクリックします。
 
    PowerShell から実行する場合は、フォルダー内で Shift + 右クリック →「PowerShell ウィンドウをここで開く」を選び、次を実行します。
@@ -24,7 +24,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
    - 回復キーをなくしても、この PC ではマスターパスワードでそのまま使えます。
 5. デスクトップとスタートメニューに「PwManager」ができます。
 
-プログラムは `%LOCALAPPDATA%\Programs\PwManager` に入ります（使う SecretManagement / SecretStore も一緒にここへ入れます）。最初の導入時だけ、PowerShell Gallery（インターネット）からそのモジュールをダウンロードします。それ以降の利用はすべて PC の中で完結します。
+プログラムは `%LOCALAPPDATA%\Programs\PwManager` に入ります（使う SecretManagement / SecretStore も一緒にここへ入れます）。PowerShell で `pwm` などのコマンドを使えるよう、ユーザーの環境変数 `PSModulePath` にこの場所を足します（アンインストールで元に戻します）。最初の導入時だけ、PowerShell Gallery（インターネット）からそのモジュールをダウンロードします。それ以降の利用はすべて PC の中で完結します。
 
 > **アップデートするとき**：新しい `PwManager` フォルダーで同じ `Install.bat`（または `Install.ps1`）を実行します。設定と保管庫のデータは別の場所にあるため、そのまま残ります。版ごとの変更点は [CHANGELOG.md](CHANGELOG.md) にあります（今の版は画面のタイトルに出ます）。
 
@@ -141,7 +141,7 @@ ZIP の中の保管庫データは暗号化されたままで、戻すには **�
 
 ### アンインストール
 
-フォルダー内の `Uninstall.bat` をダブルクリックします（PowerShell から実行する場合は `powershell -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1`）。PwManager の画面は閉じておきます。
+フォルダー内の `Uninstall.bat` をダブルクリックします（PowerShell から実行する場合は `powershell -NoProfile -ExecutionPolicy Bypass -File .\Uninstall.ps1`）。PwManager の画面は閉じておきます。フォルダーを消してしまったときは、リリースの ZIP をもう一度展開して実行します。
 
 - プログラムと、デスクトップ・スタートメニューのショートカットを削除します。
 - 保管庫のデータと設定は、**既定では残します**。あとで `Install.bat` を実行すれば、そのまま使えます。

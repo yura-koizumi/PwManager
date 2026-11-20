@@ -49,7 +49,10 @@ function Show-PwDialog([string]$Text, [string]$Kind = 'Info', [string]$Title = '
     try {
         $r = if ($Owner) { $dlg.ShowDialog($Owner) } else { $dlg.ShowDialog() }
         $r -eq [System.Windows.Forms.DialogResult]::Yes -or $r -eq [System.Windows.Forms.DialogResult]::OK
-    } finally { $dlg.Dispose() }
+    } finally {
+        # 画像と文字の書体は、画面を閉じても自動では片付かないので、ここで片付ける
+        $pic.Image.Dispose(); $font = $dlg.Font; $dlg.Dispose(); $font.Dispose()
+    }
 }
 
 function Show-PwMessage([string]$Text, [string]$Kind = 'Info') {
@@ -142,6 +145,7 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
     })
     $dlg.Add_Shown({ $dlg.Activate(); [void]$tb.Focus() })
     $dlg.Add_FormClosing({ $tb.Clear() })   # キャンセルで閉じたときも、入力欄に残さない
+    Register-PwActivity $ui $dlg   # 入力中に自動ロックで閉じないように
 
     if ($ui.Form -and $ui.Form.Visible) {
         $dlg.StartPosition = 'CenterParent'; [void]$dlg.ShowDialog($ui.Form)
@@ -186,6 +190,7 @@ function Show-PwChangePasswordDialog($ui) {
     $cancel = New-PwButton 'キャンセル'; $cancel.DialogResult = 'Cancel'
     $ok     = New-PwButton '変更する'
     $btns.Controls.AddRange([System.Windows.Forms.Control[]]@($cancel, $ok))
+    $ok.TabIndex = 0; $cancel.TabIndex = 1   # Tab では「変更する」を先に（右から並べるので、追加の順と逆になる）
     $t.Controls.Add($btns, 1, $r)
     $dlg.Controls.Add($t)
     $dlg.AcceptButton = $ok
@@ -293,6 +298,7 @@ function Show-PwEditDialog($ui, $Entry, [switch]$Copy) {
     $cancel = New-PwButton 'キャンセル'; $cancel.DialogResult = 'Cancel'
     $save   = New-PwButton '保存'
     $btns.Controls.AddRange([System.Windows.Forms.Control[]]@($cancel, $save))
+    $save.TabIndex = 0; $cancel.TabIndex = 1   # Tab では「保存」を先に（右から並べるので、追加の順と逆になる）
     $t.Controls.Add($btns, 1, $row.i)
 
     $dlg.Controls.Add($t)

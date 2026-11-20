@@ -28,7 +28,7 @@ Write-Host 'Get-PwHelp'
 $h = Get-PwHelp pwm
 Check 'Get-PwHelp pwm で画面のコマンドの説明を出す（一覧では pwm と表示しているため）' ($h.Name -eq 'Show-PwManager')
 $err = $null; try { Get-PwHelp '[' } catch { $err = $_ }
-Check '[ などの記号を含む名前でも、ワイルドカードの誤りにならない' (-not $err -or $err.Exception.Message -match '件です')
+Check '[ などの記号を含む名前でも、ワイルドカードの誤りにならない' (-not $err -or $err.Exception.Message -match 'ありません|件あります')
 
 Write-Host 'CSV'
 $dir = Join-Path $TestRoot 'csv'; New-Item -ItemType Directory -Path $dir | Out-Null

@@ -34,7 +34,12 @@ if (($env:PSModulePath -split ';') -notcontains $modules) { $env:PSModulePath = 
 # --- 1. 必要なモジュール（Microsoft 製、PowerShell Gallery から取得） -------------------
 $need = 'Microsoft.PowerShell.SecretManagement', 'Microsoft.PowerShell.SecretStore'
 # フォルダーがあるだけ（ダウンロードが途中で止まったなど）では入っているとみなさず、psd1 まであるかで判断する
-$missing = @($need | Where-Object { -not (Get-ChildItem -Path (Join-Path $modules "$_\*\$_.psd1") -ErrorAction SilentlyContinue) })
+# （フォルダー名に [ ] があってもワイルドカードとして読まないよう、-LiteralPath で調べる）
+$missing = @($need | Where-Object {
+    $n = $_
+    -not @(Get-ChildItem -LiteralPath (Join-Path $modules $n) -Directory -ErrorAction SilentlyContinue |
+           Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName "$n.psd1") })
+})
 if ($missing.Count -gt 0) {
     Write-Host "[1/4] モジュールを導入します: $($missing -join ', ')"
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -45,16 +50,17 @@ if ($missing.Count -gt 0) {
     if (-not $nuget) { Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force | Out-Null }
     # 動作確認済みのメジャーバージョン 1 系に固定（2.0 以降は互換性を確認してから上限を上げる）
     foreach ($n in $missing) { Save-Module -Name $n -Repository PSGallery -Path $modules -MaximumVersion '1.999.999' -Force }
-    # SecretStore の依存として、上限を超える SecretManagement が一緒に保存されることがあるので、1 系以外は消す
-    foreach ($n in $need) {
-        Get-ChildItem -LiteralPath (Join-Path $modules $n) -Directory -ErrorAction SilentlyContinue |
-            Where-Object { $v = $null; [version]::TryParse($_.Name, [ref]$v) -and $v.Major -ne 1 } |
-            Remove-Item -Recurse -Force
-    }
-    Get-ChildItem -LiteralPath $modules -Recurse -File | Unblock-File
 } else {
     Write-Host '[1/4] モジュールは導入済みです。'
 }
+# 毎回行う（前回が途中で止まっていても、ここで片付くように）:
+# SecretStore の依存として、上限を超える SecretManagement が一緒に保存されることがあるので、1 系以外は消す
+foreach ($n in $need) {
+    Get-ChildItem -LiteralPath (Join-Path $modules $n) -Directory -ErrorAction SilentlyContinue |
+        Where-Object { $v = $null; [version]::TryParse($_.Name, [ref]$v) -and $v.Major -ne 1 } |
+        Remove-Item -Recurse -Force
+}
+Get-ChildItem -LiteralPath $modules -Recurse -File | Unblock-File
 
 # 新しく開く PowerShell でも pwm などのコマンドを使えるよう、モジュールを探す場所（ユーザーの PSModulePath）に足す。
 # ユーザーの PSModulePath があると、PowerShell は Documents の場所を自分では足さなくなるので、それも入れておく

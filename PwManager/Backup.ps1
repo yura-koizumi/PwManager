@@ -93,6 +93,7 @@ function Restore-PwVault {
     )
     if ($script:PinnedConfig) { throw '復元は、PwManager の画面を閉じてから、新しい PowerShell で実行してください。' }
     Assert-PwGuiClosed
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "バックアップのファイルが見つかりません: $Path" }
     $tmp = Join-Path $env:TEMP ('pwm-restore-' + [guid]::NewGuid().ToString('N'))
     $vk = $null
     try {

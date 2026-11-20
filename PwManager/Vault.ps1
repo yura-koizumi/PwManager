@@ -57,9 +57,7 @@ function Use-PwVault([scriptblock]$Action) {
             try { $before = Invoke-PwUnlock $pw; break }
             catch { if ($i -ge 3) { throw }; Write-Warning $_.Exception.Message }
         }
-        if ($before.Count -gt 0) {
-            Write-Warning ("前回正しく開いてから、マスターパスワードの入力に {0} 回失敗しています（最後: {1}）。" -f $before.Count, $before.Last.ToString('yyyy/MM/dd HH:mm', [Globalization.CultureInfo]::InvariantCulture))
-        }
+        Write-PwPriorFailures $before
         & $Action
     }
 }
@@ -96,8 +94,25 @@ function Get-PwUnlockRemaining {
     # 次に試せるまでの残り秒数（0 ならすぐ試せる）
     $f = Get-PwUnlockFailures
     if (-not $f.Last) { return 0 }
-    $left = (Get-PwUnlockWait $f.Count) - ((Get-Date) - $f.Last).TotalSeconds
-    [int][Math]::Max(0, [Math]::Ceiling($left))
+    # 時計を戻した（記録が未来の日時になった）ときに待ち時間が延びないよう、経過時間は 0 未満にせず、上限も超えない
+    $elapsed = [Math]::Max(0, ((Get-Date) - $f.Last).TotalSeconds)
+    $left = (Get-PwUnlockWait $f.Count) - $elapsed
+    [int][Math]::Min($script:UnlockMaxWait, [Math]::Max(0, [Math]::Ceiling($left)))
+}
+
+function Write-PwPriorFailures($Before) {
+    # 正しいマスターパスワードで開いたとき、それまでの失敗を本人に知らせる（コマンド用。画面は Show-PwUnlockDialog が出す）
+    if (-not $Before -or $Before.Count -le 0) { return }
+    $when = if ($Before.Last) { $Before.Last.ToString('yyyy/MM/dd HH:mm', [Globalization.CultureInfo]::InvariantCulture) } else { '不明' }
+    Write-Warning ("前回正しく開いてから、マスターパスワードの入力に {0} 回失敗しています（最後: {1}）。心当たりがなければ、マスターパスワードを変更してください。" -f $Before.Count, $when)
+}
+
+function Reset-PwUnlockFailures($Before) {
+    # 正しいマスターパスワードを確かめられたら、失敗の回数を 0 に戻す
+    if ($Before -and $Before.Count -gt 0) {
+        Remove-Item -LiteralPath $script:UnlockFailPath -Force -ErrorAction SilentlyContinue
+        Write-PwAudit 'UNLOCK' "それまでに $($Before.Count) 回失敗"
+    }
 }
 
 function Get-PwVaultKeyChecked([securestring]$Password) {
@@ -127,10 +142,7 @@ function Invoke-PwUnlock([securestring]$Password) {
     $r = Get-PwVaultKeyChecked $Password
     $vk = $r.Key; $before = $r.Before
     try { Unlock-PwVault (ConvertTo-PwStorePassword $vk) } finally { Clear-PwBytes $vk }
-    if ($before.Count -gt 0) {
-        Remove-Item -LiteralPath $script:UnlockFailPath -Force -ErrorAction SilentlyContinue
-        Write-PwAudit 'UNLOCK' "それまでに $($before.Count) 回失敗"
-    }
+    Reset-PwUnlockFailures $before
     $before
 }
 
@@ -209,6 +221,8 @@ function Get-PwEntry {
       返す件数（既定 50）。
     .PARAMETER Skip
       先頭から飛ばす件数（ページ送り）。
+    .PARAMETER IncludeTotalCount
+      最初に全体の件数も返す。
     .EXAMPLE
       Get-PwEntry 'ポータル'
     .EXAMPLE
@@ -461,7 +475,7 @@ function Set-PwMasterPassword {
         $vk = Unprotect-PwRecovery (Read-PwKeyFile).Recovery $RecoveryKey
     } else {
         if (-not $Current) { $Current = Read-Host '今のマスターパスワード' -AsSecureString }
-        try { $vk = (Get-PwVaultKeyChecked $Current).Key }   # ロック解除と同じく、続けて間違えると待ち時間が延びる
+        try { $checked = Get-PwVaultKeyChecked $Current; $vk = $checked.Key }   # ロック解除と同じく、続けて間違えると待ち時間が延びる
         catch { throw "マスターパスワードを変更できませんでした。`n$($_.Exception.Message)" }
     }
     try {
@@ -476,6 +490,9 @@ function Set-PwMasterPassword {
         Write-PwKeyFile $vk $New (Read-PwKeyFile).Recovery
         Unlock-PwVault (ConvertTo-PwStorePassword $vk)
     } finally { Clear-PwBytes $vk }
+    # それまでの失敗を知らせてから、回数を 0 に戻す（回復キーで変えたときも、誰かが試していたことは知らせる）
+    $before = if ($checked) { $checked.Before } else { Get-PwUnlockFailures }
+    Write-PwPriorFailures $before
     Remove-Item -LiteralPath $script:UnlockFailPath -Force -ErrorAction SilentlyContinue
     Write-PwAudit 'MASTERPW' $(if ($UseRecoveryKey) { '回復キーで変更' } else { '変更' })
     $true

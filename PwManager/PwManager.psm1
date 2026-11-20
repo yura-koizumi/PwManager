@@ -3,7 +3,7 @@
   PwManager - SecretManagement / SecretStore を使ったローカルパスワード管理
 
   データの置き場所
-    プログラム : このフォルダー（Install.ps1 で Documents\WindowsPowerShell\Modules\PwManager にコピー）
+    プログラム : このフォルダー（Install.ps1 で %LOCALAPPDATA%\Programs\PwManager\Modules\PwManager にコピー）
     設定・ログ : %APPDATA%\PwManager\        (config.json / audit.log / vaultkey.json = 保管庫キー)
     保管庫     : %LOCALAPPDATA%\Microsoft\PowerShell\secretmanagement\localstore  (SecretStore が管理・暗号化)
 

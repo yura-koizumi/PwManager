@@ -110,6 +110,10 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
                 }
             }
         }
+        # SecretManagement が無い（前にプログラムだけ消したあと、など）と中身を確かめられない。黙って進めずに知らせる
+        if (-not $hasSecretManagement -and (Test-Path -LiteralPath $storeDir)) {
+            $warnings.Add('SecretManagement が見つからないため、保管庫に PwManager 以外のシークレットが無いかは確かめていません（ある場合は、それも消えます）。')
+        }
 
         Write-Host ''
         Write-Host '次のものを削除します。' -ForegroundColor Yellow

@@ -108,6 +108,9 @@ function Invoke-PwUiImportCsv($ui) {
     finally { $od.Dispose() }
     $rows = Read-PwCsvRows $path
     if ($rows.Count -eq 0) { Show-PwMessage 'この CSV には取り込める行がありません。' 'Warn'; return }
+    if (-not @($rows[0].PSObject.Properties.Name | Where-Object { $script:CsvPasswordColumns -contains $_ })) {
+        Show-PwMessage 'この CSV にはパスワードの列がありません。パスワードなしで書き出した CSV は取り込めません。' 'Warn'; return
+    }
     $unknown = Get-PwCsvUnknownColumns $rows $ui.Cfg
     if ($unknown.Count -gt 0) {
         $yes = Show-PwDialog ("次の列には、入れる先の項目がありません（値が入っています）:`n  $($unknown -join ', ')`n`n" +
