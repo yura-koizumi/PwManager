@@ -42,6 +42,31 @@ Set-Content -LiteralPath $cfgPath -Encoding UTF8 -Value '{ "PasswordGenerator": 
 Check '-SymbolChars を渡せば、設定で記号を使わないことにしていても記号が入る' ((New-PwPassword -SymbolChars '!#') -match '[!#]')
 Remove-Item -LiteralPath $cfgPath
 
+Write-Host '確認の画面（自動ロックで閉じられる）'
+$global:Seen = $null
+$closer = New-Object System.Windows.Forms.Timer -Property @{ Interval = 300 }
+$closer.Add_Tick({
+    $closer.Stop()
+    $global:Seen = @([System.Windows.Forms.Application]::OpenForms).Count
+    foreach ($f in @([System.Windows.Forms.Application]::OpenForms)) { $f.Close() }   # 自動ロックと同じ閉じ方
+})
+$closer.Start()
+$answer = & $Pwm { Show-PwDialog '消しますか？' 'Warn' '削除の確認' -YesNo }
+$closer.Dispose()
+Check '確認の画面は Application.OpenForms に入る（自動ロックで閉じられる）' ($global:Seen -ge 1)
+Check '自動ロックで閉じられたら「いいえ」と同じ（消さない）' ($answer -eq $false)
+
+Write-Host 'マスターパスワードの変更でも、続けて間違えると待ち時間が延びる'
+$failPath = Join-Path $env:APPDATA 'PwManager\unlock.json'
+Remove-Item -LiteralPath $failPath -ErrorAction SilentlyContinue
+function global:Unlock-SecretStore { param($Password, $PasswordTimeout) }
+for ($i = 1; $i -le 5; $i++) { try { Set-PwMasterPassword -Current (S 'wrong-password-x') -New (S 'new-password-123') -Confirm:$false } catch { } }
+$fails = & $Pwm { Get-PwUnlockFailures }
+Check '今のパスワードの間違いも、ロック解除の失敗として数える' ($fails.Count -eq 5)
+$err = $null; try { Set-PwMasterPassword -Current (S 'master-password-1') -New (S 'new-password-123') -Confirm:$false } catch { $err = $_ }
+Check '待ち時間の間は、正しいパスワードでも試せない' ($err -and $err.Exception.Message -match '待って')
+Remove-Item -LiteralPath $failPath -ErrorAction SilentlyContinue
+
 Write-Host '設定の値の種類'
 foreach ($bad in '{ "ClipboardClearSeconds": "abc" }', '{ "AutoLockMinutes": -1 }', '{ "ExcludeFromClipboardHistory": "false" }', '{ "PasswordGenerator": { "Symbols": "false" } }') {
     Set-Content -LiteralPath $cfgPath -Encoding UTF8 -Value $bad

@@ -12,13 +12,48 @@ function New-PwButton([string]$Text) {
     New-PwControl Button @{ Text = $Text; AutoSize = $true; AutoSizeMode = 'GrowAndShrink'; Padding = (New-PwPadding 6 2) }
 }
 
-function Show-PwMessage([string]$Text, [string]$Kind = 'Info') {
-    $icon = switch ($Kind) {
-        'Error' { [System.Windows.Forms.MessageBoxIcon]::Error }
-        'Warn'  { [System.Windows.Forms.MessageBoxIcon]::Warning }
-        default { [System.Windows.Forms.MessageBoxIcon]::Information }
+function Show-PwDialog([string]$Text, [string]$Kind = 'Info', [string]$Title = 'PwManager', [switch]$YesNo, $Owner) {
+    <# お知らせ・確認の画面。Windows 標準のメッセージボックスの代わりに使う。
+       標準のものは Application.OpenForms に入らず、自動ロックで閉じられない（離席中も画面に残る）ため。
+       -YesNo なら「はい」で $true（既定のボタンは「いいえ」）。自動ロックなどで閉じられたら $false。 #>
+    if (-not $Owner) { $Owner = [System.Windows.Forms.Form]::ActiveForm }
+    $dlg = New-PwControl Form @{
+        Text = $Title; FormBorderStyle = 'FixedDialog'; MaximizeBox = $false; MinimizeBox = $false; ShowIcon = $false
+        ShowInTaskbar = -not $Owner; TopMost = -not $Owner
+        StartPosition = $(if ($Owner) { 'CenterParent' } else { 'CenterScreen' })
+        Font = (New-Object System.Drawing.Font('Yu Gothic UI', 10)); AutoSize = $true; AutoSizeMode = 'GrowAndShrink'; Padding = (New-PwPadding 12)
     }
-    [void][System.Windows.Forms.MessageBox]::Show($Text, 'PwManager', [System.Windows.Forms.MessageBoxButtons]::OK, $icon)
+    $t = New-PwControl TableLayoutPanel @{ ColumnCount = 2; AutoSize = $true; Dock = 'Fill' }
+    $icon = switch ($Kind) {
+        'Error' { [System.Drawing.SystemIcons]::Error }
+        'Warn'  { [System.Drawing.SystemIcons]::Warning }
+        default { [System.Drawing.SystemIcons]::Information }
+    }
+    $pic = New-PwControl PictureBox @{ Image = $icon.ToBitmap(); SizeMode = 'AutoSize'; Margin = (New-PwPadding 0 0 12 0) }
+    $label = New-PwControl Label @{ Text = $Text; AutoSize = $true; MaximumSize = (New-PwSize 520 0); Margin = (New-PwPadding 0 6 0 12) }
+    $t.Controls.Add($pic, 0, 0); $t.Controls.Add($label, 1, 0)
+    $btns = New-PwControl FlowLayoutPanel @{ FlowDirection = 'RightToLeft'; AutoSize = $true; Dock = 'Fill'; Margin = (New-PwPadding 0) }
+    if ($YesNo) {
+        $no  = New-PwButton 'いいえ'; $no.DialogResult = 'No'
+        $yes = New-PwButton 'はい';   $yes.DialogResult = 'Yes'
+        $btns.Controls.AddRange([System.Windows.Forms.Control[]]@($no, $yes))
+        $dlg.CancelButton = $no
+        $dlg.Add_Shown({ [void]$no.Focus() })   # 誤って Enter を押しても「いいえ」
+    } else {
+        $ok = New-PwButton 'OK'; $ok.DialogResult = 'OK'
+        $btns.Controls.Add($ok)
+        $dlg.AcceptButton = $ok; $dlg.CancelButton = $ok
+    }
+    $t.Controls.Add($btns, 0, 1); $t.SetColumnSpan($btns, 2)
+    $dlg.Controls.Add($t)
+    try {
+        $r = if ($Owner) { $dlg.ShowDialog($Owner) } else { $dlg.ShowDialog() }
+        $r -eq [System.Windows.Forms.DialogResult]::Yes -or $r -eq [System.Windows.Forms.DialogResult]::OK
+    } finally { $dlg.Dispose() }
+}
+
+function Show-PwMessage([string]$Text, [string]$Kind = 'Info') {
+    [void](Show-PwDialog $Text $Kind)
 }
 
 function Invoke-PwUi($ui, [scriptblock]$Action) {

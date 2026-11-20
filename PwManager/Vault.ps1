@@ -50,6 +50,9 @@ function Use-PwVault([scriptblock]$Action) {
     catch {
         if ($script:PinnedConfig -or -not (Test-PwLockedError $_)) { throw }
         for ($i = 1; ; $i++) {
+            # 待ち時間中は尋ねない（入力しても試せないので、3 回の入力のうち 1 回を無駄にしないように）
+            $left = Get-PwUnlockRemaining
+            if ($left -gt 0) { throw "パスワードの入力に続けて失敗したため、あと $left 秒待ってから、もう一度実行してください。" }
             $pw = Read-Host 'マスターパスワード' -AsSecureString
             try { $before = Invoke-PwUnlock $pw; break }
             catch { if ($i -ge 3) { throw }; Write-Warning $_.Exception.Message }
@@ -97,9 +100,10 @@ function Get-PwUnlockRemaining {
     [int][Math]::Max(0, [Math]::Ceiling($left))
 }
 
-function Invoke-PwUnlock([securestring]$Password) {
-    <# 待ち時間を守ってロック解除する。失敗すれば回数を増やして例外を投げ直す。
-       成功すれば回数を 0 に戻し、それまでの失敗（@{ Count; Last }）を返す。 #>
+function Get-PwVaultKeyChecked([securestring]$Password) {
+    <# 待ち時間を守って、マスターパスワードで保管庫キーを取り出す。違えば失敗の回数を増やして例外を投げ直す。
+       ロック解除だけでなく、マスターパスワードの変更・回復キーの作り直しでも使う（そこで総当たりされないように）。
+       @{ Key = 保管庫キー（byte[]）; Before = それまでの失敗 @{ Count; Last } } を返す。 #>
     $left = Get-PwUnlockRemaining
     if ($left -gt 0) { throw "パスワードの入力に続けて失敗したため、あと $left 秒待ってから入力してください。" }
     $before = Get-PwUnlockFailures
@@ -114,6 +118,14 @@ function Invoke-PwUnlock([securestring]$Password) {
         }
         throw
     }
+    @{ Key = $vk; Before = $before }
+}
+
+function Invoke-PwUnlock([securestring]$Password) {
+    <# 待ち時間を守ってロック解除する。失敗すれば回数を増やして例外を投げ直す。
+       成功すれば回数を 0 に戻し、それまでの失敗（@{ Count; Last }）を返す。 #>
+    $r = Get-PwVaultKeyChecked $Password
+    $vk = $r.Key; $before = $r.Before
     try { Unlock-PwVault (ConvertTo-PwStorePassword $vk) } finally { Clear-PwBytes $vk }
     if ($before.Count -gt 0) {
         Remove-Item -LiteralPath $script:UnlockFailPath -Force -ErrorAction SilentlyContinue
@@ -449,7 +461,7 @@ function Set-PwMasterPassword {
         $vk = Unprotect-PwRecovery (Read-PwKeyFile).Recovery $RecoveryKey
     } else {
         if (-not $Current) { $Current = Read-Host '今のマスターパスワード' -AsSecureString }
-        try { $vk = Get-PwVaultKey $Current }
+        try { $vk = (Get-PwVaultKeyChecked $Current).Key }   # ロック解除と同じく、続けて間違えると待ち時間が延びる
         catch { throw "マスターパスワードを変更できませんでした。`n$($_.Exception.Message)" }
     }
     try {
