@@ -65,6 +65,13 @@ function Edit-PwUiEntry($ui) {
     if ($saved) { Update-PwUiAfterChange $ui $saved; Set-PwUiStatus $ui '更新しました。' }
 }
 
+function Copy-PwUiEntry($ui) {
+    # 選んだエントリの項目（ID・URL など）を入れた新規登録を開く。パスワードは引き継がない
+    $e = Get-PwUiSelected $ui; if (-not $e) { return }
+    $saved = Show-PwEditDialog $ui $e -Copy
+    if ($saved) { Update-PwUiAfterChange $ui $saved; Set-PwUiStatus $ui '複製して登録しました。' }
+}
+
 function Remove-PwUiEntry($ui) {
     $e = Get-PwUiSelected $ui; if (-not $e) { return }
     $r = [System.Windows.Forms.MessageBox]::Show($ui.Form,

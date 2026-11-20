@@ -134,6 +134,7 @@ function Show-PwManager {
         & $addItem $menu '変更前のパスワードをコピー' '' { Copy-PwUiPreviousPassword $ui }
         $prevItem = $menu.Items[$menu.Items.Count - 1]   # 変更前のパスワードがあるエントリでだけ出す（Opening で切り替え）
         & $addItem $menu '編集...' 'F2' { Edit-PwUiEntry $ui }
+        & $addItem $menu '複製...' 'Ctrl+D' { Copy-PwUiEntry $ui }
         & $addItem $menu '削除...' 'Del' { Remove-PwUiEntry $ui }
 
         $grid = New-PwControl DataGridView @{
@@ -214,6 +215,7 @@ function Show-PwManager {
             param($s, $e)
             if ($e.Control -and $e.KeyCode -eq 'F') { $e.SuppressKeyPress = $true; [void]$search.Focus(); $search.SelectAll() }
             elseif ($e.Control -and $e.KeyCode -eq 'N') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { New-PwUiEntry $ui } }
+            elseif ($e.Control -and $e.KeyCode -eq 'D') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Copy-PwUiEntry $ui } }
             elseif ($e.Control -and $e.KeyCode -eq 'L') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Lock-PwUi $ui } }
             elseif ($e.KeyCode -eq 'F2') { $e.SuppressKeyPress = $true; Invoke-PwUi $ui { Edit-PwUiEntry $ui } }
         })

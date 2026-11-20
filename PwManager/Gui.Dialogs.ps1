@@ -187,12 +187,13 @@ function Show-PwChangePasswordDialog($ui) {
     $state.Result
 }
 
-function Show-PwEditDialog($ui, $Entry) {
-    # 保存したらシークレット名を、キャンセルなら $null を返す
+function Show-PwEditDialog($ui, $Entry, [switch]$Copy) {
+    # 保存したらシークレット名を、キャンセルなら $null を返す。
+    # -Copy は複製: $Entry の項目を入れた新規登録（パスワードは使い回さないよう引き継がない）
     $cfg = $ui.Cfg
-    $isNew = -not $Entry
+    $isNew = -not $Entry -or $Copy
     $dlg = New-PwControl Form @{
-        Text = $(if ($isNew) { '新規登録' } else { "編集 - $($Entry.Title)" })
+        Text = $(if ($Copy) { "複製して登録 - $($Entry.Title)" } elseif ($isNew) { '新規登録' } else { "編集 - $($Entry.Title)" })
         FormBorderStyle = 'FixedDialog'; MaximizeBox = $false; MinimizeBox = $false; ShowInTaskbar = $false
         StartPosition = 'CenterParent'; Font = $ui.Font; AutoSize = $true; AutoSizeMode = 'GrowAndShrink'; Padding = (New-PwPadding 12)
     }
@@ -206,7 +207,7 @@ function Show-PwEditDialog($ui, $Entry) {
         $row.i++
     }
 
-    $title = New-PwControl TextBox @{ Width = 440; Text = $(if ($Entry) { $Entry.Title } else { '' }) }
+    $title = New-PwControl TextBox @{ Width = 440; Text = $(if ($Copy) { "$($Entry.Title) のコピー" } elseif ($Entry) { $Entry.Title } else { '' }) }
     & $addRow 'タイトル *' $title
 
     $inputs = @{}
@@ -278,7 +279,7 @@ function Show-PwEditDialog($ui, $Entry) {
             $fields = @{}
             foreach ($k in $inputs.Keys) { $fields[$k] = $inputs[$k].Text }
             $sec  = if ($pw.Text) { ConvertTo-SecureString $pw.Text -AsPlainText -Force } else { $null }
-            $name = if ($Entry) { $Entry.Name } else { $null }
+            $name = if ($Entry -and -not $Copy) { $Entry.Name } else { $null }
             $dlg.UseWaitCursor = $true
             try { $state.Saved = Invoke-PwVault $ui { Save-PwEntry -Name $name -Title $tt -Fields $fields -Password $sec } }
             finally { $dlg.UseWaitCursor = $false }
@@ -286,7 +287,7 @@ function Show-PwEditDialog($ui, $Entry) {
             $dlg.Close()
         }
     })
-    $dlg.Add_Shown({ [void]$title.Focus() })
+    $dlg.Add_Shown({ [void]$title.Focus(); $title.SelectAll() })   # 複製では「〇〇 のコピー」をすぐ打ち替えられるように
     $dlg.Add_FormClosing({ $pw.Clear() })   # キャンセルで閉じたときも、パスワード欄に残さない
     Register-PwActivity $ui $dlg
 
