@@ -34,12 +34,23 @@ if ($missing.Count -gt 0) {
     Write-Host '[1/4] モジュールは導入済みです。'
 }
 
+$m = $null
+if ([System.Threading.Mutex]::TryOpenExisting('Local\PwManager-GUI', [ref]$m)) {
+    $m.Dispose()
+    throw 'PwManager の画面が開いています。閉じてから、もう一度実行してください。'
+}
+
 # --- 2. 実行ポリシー（自分のPCで作ったスクリプトを実行できるようにする） --------------------
 $cu = Get-ExecutionPolicy -Scope CurrentUser
 $lm = Get-ExecutionPolicy -Scope LocalMachine
 $gpo = @('MachinePolicy', 'UserPolicy' | ForEach-Object { Get-ExecutionPolicy -Scope $_ }) | Where-Object { $_ -ne 'Undefined' }
 if ($gpo) {
     Write-Host "[2/4] 実行ポリシーはグループポリシーで管理されています（$($gpo -join ', ')）。変更しません。"
+    if ($gpo[0] -in 'Restricted', 'AllSigned') {
+        # 一番強いポリシーが Restricted / AllSigned だと、署名の無い PwManager はショートカットからも起動できない（画面も出ない）
+        Write-Warning ("この PC では、会社などの設定（$($gpo[0])）により PwManager を実行できません。" +
+                       'PC の管理者に、実行ポリシーを RemoteSigned にしてもらえるか相談してください。')
+    }
 } elseif ($cu -in 'Restricted', 'AllSigned' -or ($cu -eq 'Undefined' -and $lm -in 'Restricted', 'AllSigned', 'Undefined')) {
     # -ExecutionPolicy Bypass で起動していると Process スコープが優先されるため、
     # 設定は保存されても ExecutionPolicyOverride が投げられる。これは成功扱いにする。
@@ -59,8 +70,12 @@ $modules = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPower
 $dst = Join-Path $modules 'PwManager'
 if ((Resolve-Path $src).Path.TrimEnd('\') -ne $dst.TrimEnd('\')) {
     New-Item -ItemType Directory -Path $modules -Force | Out-Null
+    # 入れ直しのとき、コピーに失敗しても今のプログラムが消えたままにならないよう、先に横へコピーしてから入れ替える
+    $new = "$dst.new"
+    if (Test-Path -LiteralPath $new) { Remove-Item -LiteralPath $new -Recurse -Force }
+    Copy-Item -LiteralPath $src -Destination $new -Recurse
     if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force }  # プログラムのみ。設定・データは別の場所
-    Copy-Item -LiteralPath $src -Destination $dst -Recurse
+    Rename-Item -LiteralPath $new -NewName (Split-Path $dst -Leaf)
 }
 Get-ChildItem -LiteralPath $dst -Recurse -File | Unblock-File
 $psd = Import-PowerShellDataFile (Join-Path $dst 'PwManager.psd1')

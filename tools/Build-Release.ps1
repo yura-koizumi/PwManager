@@ -54,7 +54,16 @@ $allowed = '\.(ps1|psm1|psd1|bat|md)$|^config\.default\.json$'
 $unexpected = @(Get-ChildItem -LiteralPath $out -Recurse -File | Where-Object { $_.Name -notmatch $allowed })
 if ($unexpected) { throw "想定外のファイルが含まれています: $($unexpected.FullName -join ', ')" }
 
-Compress-Archive -LiteralPath (Get-ChildItem -LiteralPath $out).FullName -DestinationPath $zip -CompressionLevel Optimal
+# Windows PowerShell 5.1 の Compress-Archive はフォルダーの区切りを \ で書き、エクスプローラー以外の展開ソフトでは
+# 「PwManager\Setup.ps1」という名前のファイルになることがある。ZIP の決まりどおり / で書く
+Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
+$archive = [IO.Compression.ZipFile]::Open($zip, 'Create')
+try {
+    foreach ($f in Get-ChildItem -LiteralPath $out -Recurse -File) {
+        $entry = $f.FullName.Substring($out.Length + 1) -replace '\\', '/'
+        [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($archive, $f.FullName, $entry, 'Optimal')
+    }
+} finally { $archive.Dispose() }
 
 # Windows Sandbox の設定（ホストのフォルダーは読み取り専用で割り当てるため、Sandbox から書き換えられない）
 #   軽くするため、メモリーを 2 GB にし、マイク・カメラ・プリンターは使わない。
