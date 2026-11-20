@@ -9,7 +9,8 @@
   プログラムとショートカットを削除します。
   保管庫のデータと設定は、既定では残します（あとで Install.bat を実行すれば、そのまま使えます）。
   データも削除するときは、途中の質問で選ぶか、-RemoveData を付けて実行します。
-  SecretManagement / SecretStore モジュールと実行ポリシーは、ほかでも使っている可能性があるため変更しません。
+  PwManager と一緒に入れた SecretManagement / SecretStore（%LOCALAPPDATA%\Programs\PwManager）も削除します。
+  ほかの場所に入っている SecretManagement / SecretStore と、実行ポリシーは変更しません。
 #>
 [CmdletBinding()]
 param([switch]$RemoveData)
@@ -20,7 +21,11 @@ Write-Host '=== PwManager アンインストール ===' -ForegroundColor Cyan
 # 場所は PwManager.psm1 と同じ（モジュールが消えていても動くよう、ここで直接決める）
 $dataDir   = Join-Path $env:APPDATA 'PwManager'
 $storeDir  = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secretmanagement\localstore'
-$moduleDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PwManager'
+$root      = Join-Path $env:LOCALAPPDATA 'Programs\PwManager'   # Install.ps1 と同じ
+$modules   = Join-Path $root 'Modules'
+$moduleDir = Join-Path $modules 'PwManager'
+$oldModuleDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PwManager'   # 以前の版の置き場所
+if (($env:PSModulePath -split ';') -notcontains $modules) { $env:PSModulePath = "$modules;$env:PSModulePath" }   # 一緒に入れた SecretManagement を使う
 $vaultName = 'PwVault'
 $configPath = Join-Path $dataDir 'config.json'
 if (Test-Path -LiteralPath $configPath) {
@@ -32,7 +37,7 @@ if (Test-Path -LiteralPath $configPath) {
 
 # 保管庫の中身を確かめるときに使うので、プログラムを消す前に読み込んでおく（このフォルダーのもの、なければインストール済みのもの）
 $pwm = $null
-foreach ($psd in (Join-Path $PSScriptRoot 'PwManager\PwManager.psd1'), (Join-Path $moduleDir 'PwManager.psd1')) {
+foreach ($psd in (Join-Path $PSScriptRoot 'PwManager\PwManager.psd1'), (Join-Path $moduleDir 'PwManager.psd1'), (Join-Path $oldModuleDir 'PwManager.psd1')) {
     if (Test-Path -LiteralPath $psd) {
         try { $pwm = Import-Module $psd -Force -PassThru -ErrorAction Stop; break } catch { }
     }
@@ -51,12 +56,11 @@ foreach ($dir in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFold
 }
 
 # --- 2. プログラム -------------------------------------------------------------------
-if (Test-Path -LiteralPath $moduleDir) {
-    Remove-Item -LiteralPath $moduleDir -Recurse -Force
-    Write-Host "[2/3] プログラムを削除しました: $moduleDir"
-} else {
-    Write-Host '[2/3] プログラムはインストールされていません。'
+$removed = $false
+foreach ($d in $moduleDir, $oldModuleDir) {
+    if (Test-Path -LiteralPath (Join-Path $d 'PwManager.psd1')) { Remove-Item -LiteralPath $d -Recurse -Force; Write-Host "[2/3] プログラムを削除しました: $d"; $removed = $true }
 }
+if (-not $removed) { Write-Host '[2/3] プログラムはインストールされていません。' }
 
 # --- 3. 保管庫のデータと設定（既定では残す） ---------------------------------------------
 function Write-Kept {
@@ -128,8 +132,20 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
     }
 }
 
+# --- 最後に、一緒に入れた SecretManagement / SecretStore と、モジュールを探す場所の設定を消す ----------
+# （データを消すときに SecretManagement を使うので、最後にする）
+Remove-Module PwManager, Microsoft.PowerShell.SecretStore, Microsoft.PowerShell.SecretManagement -Force -ErrorAction SilentlyContinue
+if (Test-Path -LiteralPath $root) {
+    try { Remove-Item -LiteralPath $root -Recurse -Force; Write-Host "一緒に入れた SecretManagement / SecretStore を削除しました: $root" }
+    catch { Write-Warning "一部のファイルを削除できませんでした（PowerShell をすべて閉じてから、このフォルダーを削除してください）: $root" }
+}
+$userPaths = @([Environment]::GetEnvironmentVariable('PSModulePath', 'User') -split ';' | Where-Object { $_ -and $_ -ne $modules })
+$documents = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
+# Install.ps1 が足した Documents の場所だけが残るなら、設定ごと消す（PowerShell の既定に戻る）
+if ($userPaths.Count -eq 0 -or ($userPaths.Count -eq 1 -and $userPaths[0] -eq $documents)) { $userPaths = $null }
+[Environment]::SetEnvironmentVariable('PSModulePath', $(if ($userPaths) { $userPaths -join ';' } else { $null }), 'User')
+
 Write-Host ''
 Write-Host 'アンインストールが完了しました。' -ForegroundColor Green
-Write-Host '  SecretManagement / SecretStore モジュールと実行ポリシーは変更していません。不要なら次で戻せます:'
-Write-Host '    Uninstall-Module Microsoft.PowerShell.SecretStore, Microsoft.PowerShell.SecretManagement'
+Write-Host '  実行ポリシーは変更していません。元に戻すときは次を実行します:'
 Write-Host '    Set-ExecutionPolicy Undefined -Scope CurrentUser'

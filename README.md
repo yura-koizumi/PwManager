@@ -24,7 +24,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
    - 回復キーをなくしても、この PC ではマスターパスワードでそのまま使えます。
 5. デスクトップとスタートメニューに「PwManager」ができます。
 
-最初の導入時だけ、PowerShell Gallery（インターネット）からモジュールをダウンロードします。それ以降の利用はすべて PC の中で完結します。
+プログラムは `%LOCALAPPDATA%\Programs\PwManager` に入ります（使う SecretManagement / SecretStore も一緒にここへ入れます）。最初の導入時だけ、PowerShell Gallery（インターネット）からそのモジュールをダウンロードします。それ以降の利用はすべて PC の中で完結します。
 
 > **アップデートするとき**：新しい `PwManager` フォルダーで同じ `Install.bat`（または `Install.ps1`）を実行します。設定と保管庫のデータは別の場所にあるため、そのまま残ります。版ごとの変更点は [CHANGELOG.md](CHANGELOG.md) にあります（今の版は画面のタイトルに出ます）。
 
@@ -146,7 +146,7 @@ ZIP の中の保管庫データは暗号化されたままで、戻すには **�
 - プログラムと、デスクトップ・スタートメニューのショートカットを削除します。
 - 保管庫のデータと設定は、**既定では残します**。あとで `Install.bat` を実行すれば、そのまま使えます。
 - データも削除するときは、途中の質問で `y` を選び、最後に `DELETE` と入力します。保管庫に PwManager 以外のシークレットがある場合などは、削除する前に警告します。手で取ったバックアップ（ZIP）は削除しません。データを残してアンインストールしたあとでも、もう一度 `Uninstall.bat` を実行すればデータを削除できます。
-- SecretManagement / SecretStore モジュールと実行ポリシーは、ほかでも使っている可能性があるため変更しません（戻し方は最後に表示されます）。
+- 一緒に入れた SecretManagement / SecretStore（`%LOCALAPPDATA%ProgramsPwManager`）も削除します。ほかの場所に入っているものと、実行ポリシーは変更しません（実行ポリシーの戻し方は最後に表示されます）。
 
 ---
 
@@ -258,6 +258,7 @@ Get-PwEntry -All | Out-GridView                                              # �
 - **秘密にすべき内容はパスワード欄に入れてください。** SecretManagement の仕様上、ID・URL・備考などのメタデータは、機密情報を入れることを前提にしていません。PIN や秘密の質問の答えなどは、備考に書かずに別のエントリとして登録してください。
 - 追加・更新・削除・バックアップ・ロック解除の失敗の記録が `%APPDATA%\PwManager\audit.log` に残ります。ログは暗号化されないため、パスワードもタイトル（サービス名）も書かず、エントリの ID（`pwm:…`）だけを記録します。1 MB（約 1 万件）を超えると `audit.old.log` に移し、その 1 つ前の記録は消えます。
 - 画面のロック（Ctrl+L・自動ロック）では、PwManager のプロセスを終了して、新しいプロセスでロック解除の画面を出し直します。保管庫の鍵やコピーしたパスワードはメモリーに残りません（コピー中のパスワードはクリップボードからも消します）。`pwm` で開いた場合は、画面を閉じるだけです。席を離れるときは Windows のロック（**Win+L**）も併用してください。
+- プログラムは、OneDrive などで同期されない `%LOCALAPPDATA%\Programs\PwManager` に置きます（Documents の下だと、同期先でプログラムを書き換えられたときに、マスターパスワードを盗まれうるため）。使う SecretManagement / SecretStore も同じ場所のものを使います。
 - ノート PC の紛失・盗難に備えて、BitLocker（ドライブの暗号化）を有効にしておくことをおすすめします。
 - 会社の規程で、業務用パスワードの保管方法が定められている場合は、それに従ってください。
 
@@ -286,7 +287,7 @@ PwManager\                 … 配布用フォルダー
   README.md / CHANGELOG.md（変更履歴） / LICENSE
   tests\                   … 自動テスト（配布・インストールの対象外）
   tools\Build-Release.ps1  … リリース用フォルダー（release\、git の管理対象外）を作る（-Bump で版を上げる、-IncludeTests でテストも入れる）
-  PwManager\               … 本体（Documents\WindowsPowerShell\Modules\PwManager にコピーされる）
+  PwManager\               … 本体（%LOCALAPPDATA%\Programs\PwManager\Modules\PwManager にコピーされる）
     PwManager.psd1         … バージョン情報（Build-Release.ps1 -Bump で上げる）
     PwManager.psm1         … 共通の定数と、下の各ファイルの読み込み
     Config.ps1             … 設定・状態・監査ログ

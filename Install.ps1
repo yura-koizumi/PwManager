@@ -17,9 +17,18 @@ if ($PSVersionTable.PSEdition -ne 'Desktop') {
     throw 'Windows PowerShell 5.1（スタートメニューの「Windows PowerShell」）で実行してください。'
 }
 
+# --- プログラムの置き場所 ---------------------------------------------------------------
+# PwManager と、使う SecretManagement / SecretStore を、%LOCALAPPDATA%\Programs\PwManager\Modules にまとめて置く。
+# Documents の下（PowerShell の既定の置き場所）は OneDrive で同期されることがあり、クラウド側でプログラムを
+# 書き換えられると、次に開いたときにマスターパスワードを盗まれうるため。LOCALAPPDATA は同期されず、このユーザーだけが書ける。
+$root    = Join-Path $env:LOCALAPPDATA 'Programs\PwManager'
+$modules = Join-Path $root 'Modules'
+New-Item -ItemType Directory -Path $modules -Force | Out-Null
+if (($env:PSModulePath -split ';') -notcontains $modules) { $env:PSModulePath = "$modules;$env:PSModulePath" }   # このあとの処理でも、ここのものを使う
+
 # --- 1. 必要なモジュール（Microsoft 製、PowerShell Gallery から取得） -------------------
 $need = 'Microsoft.PowerShell.SecretManagement', 'Microsoft.PowerShell.SecretStore'
-$missing = @($need | Where-Object { -not (Get-Module -ListAvailable -Name $_) })
+$missing = @($need | Where-Object { -not (Test-Path -LiteralPath (Join-Path $modules $_)) })
 if ($missing.Count -gt 0) {
     Write-Host "[1/4] モジュールを導入します: $($missing -join ', ')"
     [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -29,9 +38,18 @@ if ($missing.Count -gt 0) {
         Where-Object { $_.Version -ge [version]'2.8.5.201' }
     if (-not $nuget) { Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Scope CurrentUser -Force | Out-Null }
     # 動作確認済みのメジャーバージョン 1 系に固定（2.0 以降は互換性を確認してから上限を上げる）
-    foreach ($n in $missing) { Install-Module -Name $n -Repository PSGallery -Scope CurrentUser -MaximumVersion '1.999.999' -Force }
+    foreach ($n in $missing) { Save-Module -Name $n -Repository PSGallery -Path $modules -MaximumVersion '1.999.999' -Force }
+    Get-ChildItem -LiteralPath $modules -Recurse -File | Unblock-File
 } else {
     Write-Host '[1/4] モジュールは導入済みです。'
+}
+
+# 新しく開く PowerShell でも pwm などのコマンドを使えるよう、モジュールを探す場所（ユーザーの PSModulePath）に足す。
+# ユーザーの PSModulePath があると、PowerShell は Documents の場所を自分では足さなくなるので、それも入れておく
+$userPaths = @([Environment]::GetEnvironmentVariable('PSModulePath', 'User') -split ';' | Where-Object { $_ })
+if ($userPaths -notcontains $modules) {
+    if ($userPaths.Count -eq 0) { $userPaths = @(Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules') }
+    [Environment]::SetEnvironmentVariable('PSModulePath', ((@($modules) + $userPaths) -join ';'), 'User')
 }
 
 $m = $null
@@ -66,8 +84,13 @@ if ($gpo) {
 
 # --- 3. プログラムを配置 ------------------------------------------------------------------
 $src = Join-Path $PSScriptRoot 'PwManager'
-$modules = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
 $dst = Join-Path $modules 'PwManager'
+# 以前の版は Documents の下に置いていた。残しておくと同期で書き換えられうるので消す（データは別の場所なので影響しない）
+$oldDst = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PwManager'
+if ((Test-Path -LiteralPath (Join-Path $oldDst 'PwManager.psd1')) -and $oldDst.TrimEnd('\') -ne $dst.TrimEnd('\')) {
+    Remove-Item -LiteralPath $oldDst -Recurse -Force
+    Write-Host "      以前の場所のプログラムを削除しました: $oldDst"
+}
 if ((Resolve-Path $src).Path.TrimEnd('\') -ne $dst.TrimEnd('\')) {
     New-Item -ItemType Directory -Path $modules -Force | Out-Null
     # 入れ直しのとき、コピーに失敗しても今のプログラムが消えたままにならないよう、先に横へコピーしてから入れ替える
@@ -92,4 +115,5 @@ if (-not $NoShortcut) {
 
 Write-Host ''
 Write-Host 'セットアップが完了しました。' -ForegroundColor Green
-Write-Host '  起動: デスクトップの「PwManager」、または PowerShell で  pwm'
+Write-Host '  起動: デスクトップの「PwManager」、または PowerShell で  pwm（pwm などのコマンドは、新しく開いた PowerShell で使えます）'
+Write-Host "  プログラムの場所: $dst"

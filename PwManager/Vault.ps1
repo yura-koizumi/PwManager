@@ -18,9 +18,21 @@ function ConvertFrom-PwSecureString([securestring]$Secure) {
 }
 
 function Register-PwVaultIfMissing($Cfg) {
-    if (-not (Get-SecretVault -Name $Cfg.VaultName -ErrorAction SilentlyContinue)) {
-        $hasDefault = @(Get-SecretVault -ErrorAction SilentlyContinue | Where-Object { $_.IsDefault }).Count -gt 0
-        Register-SecretVault -Name $Cfg.VaultName -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault:(-not $hasDefault)
+    # 保管庫を SecretManagement に登録する。SecretManagement は登録したときの SecretStore の場所を覚えていて、そこから読み込む。
+    # 今使う SecretStore（PwManager と同じ場所に入れたもの）と違う場所で登録されていれば、登録し直す
+    # （Documents の下は OneDrive で同期されることがあり、そこにあるプログラムを書き換えられると、パスワードを盗まれうるため）。
+    # 登録し直しても、保管庫のデータ（localstore）はそのまま。
+    $vault = Get-SecretVault -Name $Cfg.VaultName -ErrorAction SilentlyContinue
+    $store = @(Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretStore)[0]
+    $wasDefault = $null
+    if ($vault -and $store -and $vault.ModulePath -and -not ([string]$vault.ModulePath).StartsWith($store.ModuleBase, [StringComparison]::OrdinalIgnoreCase)) {
+        $wasDefault = $vault.IsDefault
+        Unregister-SecretVault -Name $Cfg.VaultName
+        $vault = $null
+    }
+    if (-not $vault) {
+        $default = if ($null -ne $wasDefault) { $wasDefault } else { @(Get-SecretVault -ErrorAction SilentlyContinue | Where-Object { $_.IsDefault }).Count -eq 0 }
+        Register-SecretVault -Name $Cfg.VaultName -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault:$default
         Write-Host "保管庫 '$($Cfg.VaultName)' を登録しました。"
     }
 }
