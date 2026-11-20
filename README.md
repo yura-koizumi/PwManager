@@ -47,7 +47,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 | 複製 | **Ctrl+D** または右クリック →「複製...」。ID・URL などを入れた新規登録が開きます（パスワードは使い回さないよう引き継ぎません。「生成」で作れます） |
 | 削除 | **Del**、または右クリック（確認画面が出ます） |
 | 席を離れる | **Ctrl+L** でロック（10 分間操作がないと自動でロック） |
-| そのほか | **≡** から、バックアップ・マスターパスワードの変更・設定ファイルを開く・ロック |
+| そのほか | **≡** から、バックアップ・CSV の取り込みと書き出し・マスターパスワードの変更・設定ファイルを開く・ロック |
 
 **コピーしたパスワードの扱い**
 
@@ -58,18 +58,19 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 
 ## 3. 設定のカスタマイズ
 
-設定ファイルは `%APPDATA%\PwManager\config.json` です。画面の **≡** →「設定ファイルを開く」で開き、保存したあと PwManager を開き直すと反映されます（メモ帳が無い環境では、ファイルの場所をエクスプローラーで開きます）。
-書かなかった項目には既定値が使われるので、変えたい項目だけを書けば十分です。
+設定ファイルは `%APPDATA%\PwManager\config.json` です。画面の **≡** →「設定ファイルを開く」で開き、保存したあと PwManager を開き直すと反映されます（メモ帳が無ければ、.json に関連付けられたアプリ、それも無ければエクスプローラーでファイルの場所を開きます）。
+書かなかった項目には既定値が使われるので、変えたい項目だけを書けば十分です（`PasswordGenerator` の中も、書いた項目だけが変わります。`Fields` と `Categories` は、書いた一覧で置き換わります）。
 
 | 項目 | 既定値 | 内容 |
 | --- | --- | --- |
 | `ClipboardClearSeconds` | 30 | コピーしたパスワードを消すまでの秒数（0 にすると消さない） |
 | `ExcludeFromClipboardHistory` | true | パスワードをクリップボード履歴やクラウド同期の対象から外す |
 | `AutoLockMinutes` | 10 | 何分間操作がなければロックするか（0 にすると自動ロックしない） |
-| `UnlockTimeoutSeconds` | 900 | 一度ロックを解除したあと、保管庫を開いたままにする秒数（過ぎると、使っている途中でもマスターパスワードの再入力を求める）。短いほど安全で、再入力は増える |
+| `UnlockTimeoutSeconds` | 900 | 一度ロックを解除したあと、保管庫を開いたままにする秒数（過ぎると、使っている途中でもマスターパスワードの再入力を求める）。短いほど安全で、再入力は増える。120 以上 |
 | `Fields` | ID, URL, 備考 | 表示・入力する項目（下で詳しく説明） |
 | `Categories` | （なし） | カテゴリの候補（`Type: "Category"` の項目を作ったときだけ使う） |
-| `PasswordGenerator` | 20 文字・記号あり | 「生成」の既定の長さ（4〜128）と、使う記号 |
+| `PasswordGenerator` | 20 文字・記号あり | 「生成」の既定の長さ（`Length`、4〜128）、記号を使うか（`Symbols`）、使う記号（`SymbolChars`） |
+| `VaultName` | PwVault | SecretManagement に登録する保管庫の名前（ふつうは変えない） |
 
 ### 項目（Fields）を追加・変更する
 
@@ -186,7 +187,7 @@ Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV �
 
 ### 書き出す
 
-画面では **≡ →「CSV に書き出す...」** を選び、保存の画面の「ファイルの種類」で「ブラウザー・ほかのツール向け」「Excel 向け（パスワードあり）」「Excel 向け（パスワードなし）」から選びます。コマンドでは次のとおりです。
+画面では **≡ →「CSV に書き出す...」** を選び、保存の画面の「ファイルの種類」で「ブラウザー・ほかのツール向け」「Excel 向け・パスワードあり」「Excel 向け・パスワードなし」から選びます。コマンドでは次のとおりです。
 
 | 書き出し方 | 用途 |
 | --- | --- |
@@ -282,11 +283,11 @@ Get-PwEntry -All | Out-GridView                                              # �
 PwManager\                 … 配布用フォルダー
   Install.bat / Install.ps1      … セットアップ・アップデート
   Uninstall.bat / Uninstall.ps1  … アンインストール（既定ではデータを残す）
-  README.md
+  README.md / CHANGELOG.md（変更履歴） / LICENSE
   tests\                   … 自動テスト（配布・インストールの対象外）
-  tools\Build-Release.ps1  … リリース用フォルダー（release\、git の管理対象外）を作る
+  tools\Build-Release.ps1  … リリース用フォルダー（release\、git の管理対象外）を作る（-Bump で版を上げる、-IncludeTests でテストも入れる）
   PwManager\               … 本体（Documents\WindowsPowerShell\Modules\PwManager にコピーされる）
-    PwManager.psd1         … バージョン情報（更新するときは ModuleVersion を上げる）
+    PwManager.psd1         … バージョン情報（Build-Release.ps1 -Bump で上げる）
     PwManager.psm1         … 共通の定数と、下の各ファイルの読み込み
     Config.ps1             … 設定・状態・監査ログ
     Key.ps1                … 保管庫キー（マスターパスワード・Windows ユーザーへの結び付け・回復キー）
@@ -306,7 +307,7 @@ PwManager\                 … 配布用フォルダー
     Launch.ps1             … ショートカットから呼び出される起動スクリプト
     config.default.json    … 設定の既定値
 
-%APPDATA%\PwManager\       … config.json / vaultkey.json（保管庫キー） / audit.log / audit.old.log / unlock.json（入力の失敗の記録） / pre-restore-*.zip
+%APPDATA%\PwManager\       … config.json / vaultkey.json（保管庫キー） / audit.log / audit.old.log / unlock.json（入力の失敗の記録） / pre-restore-*.zip・pre-rekey-*.zip（復元・回復キーの作り直しの前に退避したもの）
 %LOCALAPPDATA%\Microsoft\PowerShell\secretmanagement\localstore\  … 暗号化された保管庫（SecretStore が管理）
 ```
 
@@ -326,11 +327,11 @@ PwManager\                 … 配布用フォルダー
    powershell -NoProfile -STA -ExecutionPolicy Bypass -File .\tests\Demo-Gui.ps1 -Count 3000
    ```
 
-2. `PwManager.psd1` の `ModuleVersion` を上げ、git にコミットします。
-3. リリース用のフォルダーを作ります（テストを実行し、成功したときだけ作ります）。
+2. 利用者に見える変更は、`CHANGELOG.md` の「次の版」に 1 行ずつ書き、git にコミットします。
+3. リリース用のフォルダーを作ります（テストを実行し、成功したときだけ作ります）。`-Bump` を付けると、版の最後の番号を 1 つ上げ（`0.5.1` → `0.5.2`）、「次の版」をその版の見出しに移します。途中で失敗したら、版と CHANGELOG は元に戻ります。
 
    ```powershell
-   powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-Release.ps1
+   powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-Release.ps1 -Bump
    ```
 
    `release\PwManager-<バージョン>\` と、その ZIP ができます。利用者にはこれを渡します（テストや git の情報は含まれません）。配布するファイルを増やしたときは、`Build-Release.ps1` の一覧にも追加します。

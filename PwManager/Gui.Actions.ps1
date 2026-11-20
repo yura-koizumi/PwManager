@@ -49,9 +49,13 @@ function Copy-PwUiColumn($ui, [string]$ColumnName) {
 function Open-PwUiUrl($ui, $Field) {
     $e = Get-PwUiSelected $ui; if (-not $e) { return }
     $v = ([string]$e.($Field.Name)).Trim()
-    # 任意のファイルやコマンドを実行しないよう、http(s) の URL だけ開く
-    if ($v -notmatch '^https?://') { Set-PwUiStatus $ui "http:// または https:// で始まる$($Field.Label)だけ開けます。" -Warn; return }
-    Start-Process $v
+    # 任意のファイルやコマンドを実行しないよう、http(s) の URL だけ開く。
+    # 空白・引用符・制御文字を含むものは、ブラウザーに余計な引数として渡りうるので開かない
+    $u = $null
+    if ($v -match '[\s"<>\x00-\x1f\x7f]' -or -not [Uri]::TryCreate($v, 'Absolute', [ref]$u) -or $u.Scheme -notin 'http', 'https') {
+        Set-PwUiStatus $ui "http:// または https:// で始まる$($Field.Label)だけ開けます（空白や引用符を含むものは開きません）。" -Warn; return
+    }
+    Start-Process $u.AbsoluteUri
 }
 
 function New-PwUiEntry($ui) {
@@ -88,7 +92,8 @@ function Invoke-PwUiBackup($ui) {
     # 移行や万一に備えて、手でバックアップを取る（保存先は毎回選ぶ）
     $fb = New-Object System.Windows.Forms.FolderBrowserDialog
     $fb.Description = "バックアップの保存先を選んでください（USB メモリーなど）。`n戻すときは、回復キーが必要です。"
-    if ($fb.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    # ファイル・フォルダーを選ぶ画面は自動ロックで閉じられないので、選んでいる間にロックしていたら何もしない
+    if ($fb.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK -or $ui.Locking) { return }
     $zip = Backup-PwVault -Destination $fb.SelectedPath
     Set-PwUiStatus $ui "バックアップしました: $($zip.FullName)"
 }
@@ -98,7 +103,7 @@ function Invoke-PwUiImportCsv($ui) {
     $od = New-Object System.Windows.Forms.OpenFileDialog -Property @{
         Title = 'CSV から取り込む'; Filter = 'CSV ファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*'
     }
-    try { if ($od.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }; $path = $od.FileName }
+    try { if ($od.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK -or $ui.Locking) { return }; $path = $od.FileName }
     finally { $od.Dispose() }
     $rows = Read-PwCsvRows $path
     if ($rows.Count -eq 0) { Show-PwMessage 'この CSV には取り込める行がありません。' 'Warn'; return }
@@ -113,8 +118,11 @@ function Invoke-PwUiImportCsv($ui) {
     }
     $ui.Form.UseWaitCursor = $true
     try { $res = Import-PwCsvRows $rows $ui.Cfg $path { param($a) Invoke-PwVault $ui $a } }
-    finally { $ui.Form.UseWaitCursor = $false }
-    Update-PwUiData $ui
+    finally {
+        $ui.Form.UseWaitCursor = $false
+        $ui.LastActivity = Get-Date   # 取り込みに時間がかかっても、終わった直後に自動ロックしないように
+        if (-not $ui.Locking) { Update-PwUiData $ui }   # 途中で止まっても、取り込めた分を一覧に出す
+    }
     Set-PwUiStatus $ui "$($res.Ok) 件を取り込みました。"
     Show-PwMessage ("$($res.Ok) 件を取り込みました（タイトルかパスワードが空で飛ばした行: $($res.Skip) 件）。`n`n" +
                     "取り込んだ CSV にはパスワードがそのまま残っています。削除して、ごみ箱も空にしてください。")
@@ -126,7 +134,7 @@ function Invoke-PwUiExportCsv($ui) {
         Title = 'CSV に書き出す'; FileName = "PwManager-$(Get-PwNow 'yyyyMMdd').csv"; DefaultExt = 'csv'
         Filter = 'ブラウザー・ほかのツール向け (*.csv)|*.csv|Excel 向け・パスワードあり (*.csv)|*.csv|Excel 向け・パスワードなし (*.csv)|*.csv'
     }
-    try { if ($sd.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }; $path = $sd.FileName; $kind = $sd.FilterIndex }
+    try { if ($sd.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK -or $ui.Locking) { return }; $path = $sd.FileName; $kind = $sd.FilterIndex }
     finally { $sd.Dispose() }
     $withPw = $kind -ne 3
     if ($withPw) {

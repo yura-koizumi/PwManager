@@ -63,7 +63,7 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
     $dlg = New-PwControl Form @{
         Text = 'PwManager - ロック解除'; FormBorderStyle = 'FixedDialog'; MaximizeBox = $false; MinimizeBox = $false
         Font = $ui.Font; AutoSize = $true; AutoSizeMode = 'GrowAndShrink'; Padding = (New-PwPadding 12); TopMost = $true
-        Tag = 'PwUnlock'   # 自動ロックの判定で、この画面は閉じない
+        Tag = 'PwUnlock'   # ロック解除の画面の目印
     }
     $layout  = New-PwControl TableLayoutPanel @{ ColumnCount = 1; AutoSize = $true; Dock = 'Fill' }
     $msg     = New-PwControl Label @{ Text = $Message; AutoSize = $true; MaximumSize = (New-PwSize 380 0); Margin = (New-PwPadding 3 3 3 8) }
@@ -193,7 +193,8 @@ function Show-PwEditDialog($ui, $Entry, [switch]$Copy) {
     $cfg = $ui.Cfg
     $isNew = -not $Entry -or $Copy
     $dlg = New-PwControl Form @{
-        Text = $(if ($Copy) { "複製して登録 - $($Entry.Title)" } elseif ($isNew) { '新規登録' } else { "編集 - $($Entry.Title)" })
+        # ウィンドウのタイトルはほかのアプリからも読めるので、サービス名は入れない（内容は画面の中に出ている）
+        Text = $(if ($Copy) { '複製して登録' } elseif ($isNew) { '新規登録' } else { '編集' })
         FormBorderStyle = 'FixedDialog'; MaximizeBox = $false; MinimizeBox = $false; ShowInTaskbar = $false
         StartPosition = 'CenterParent'; Font = $ui.Font; AutoSize = $true; AutoSizeMode = 'GrowAndShrink'; Padding = (New-PwPadding 12)
     }

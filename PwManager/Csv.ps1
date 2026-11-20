@@ -74,6 +74,7 @@ function Import-PwCsv {
                "設定の Fields に項目を追加してから取り込むか（README「項目（Fields）を追加・変更する」）、" +
                "その列を取り込まなくてよければ -IgnoreUnknownColumns を付けて実行してください。") -f ($unknown -join ', ')
     }
+    if ($rows.Count -eq 0) { Write-Warning 'この CSV には取り込める行がありません（空か、見出しの行だけです）。'; return }
     $r = Import-PwCsvRows $rows $cfg $Path
     Write-Host "$($r.Ok) 件を取り込みました。（タイトルかパスワードが空でスキップ: $($r.Skip) 件）" -ForegroundColor Green
     Write-Warning '取り込みが済んだら、元の CSV ファイルは削除し、ごみ箱も空にしてください（パスワードが平文で残っています）。'
@@ -81,6 +82,8 @@ function Import-PwCsv {
 
 function Read-PwCsvRows([string]$Path, [string]$Encoding = 'Auto') {
     # CSV を読む。Auto は、BOM があるか UTF-8 として正しく読めれば UTF-8、そうでなければ Excel の「CSV (コンマ区切り)」（Shift-JIS）
+    # .NET のメソッドは PowerShell の今いるフォルダーを知らないので、相対パスを先に解決する
+    $Path = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
     if ($Encoding -eq 'Auto') {
         $bytes = [IO.File]::ReadAllBytes($Path)
         $Encoding = 'UTF8'
@@ -116,9 +119,14 @@ function Import-PwCsvRows($Rows, $Cfg, [string]$Path, [scriptblock]$Wrap = { par
     }
     $urlField = @($cfg.Fields | Where-Object { $_.Name -eq 'Url' })[0]
     $urlColumns = @('url') + @(if ($urlField) { Get-PwCsvFieldColumns $urlField })
+    # Excel 用に付けた ' を外すのは、PwManager の既定の形で書き出した CSV（Updated の列がある）だけ。
+    # ほかのツールや Chrome 形式の CSV は値をそのまま書いているので、もともと ' で始まる値を削らない
+    $unprotect = $rows.Count -gt 0 -and $null -ne $rows[0].PSObject.Properties['Updated']
+    $clean = { param([string]$v) if ($unprotect) { Unprotect-PwCsvValue $v } else { $v } }
     $ok = 0; $skip = 0
+    try {
     foreach ($r in $rows) {
-        $title = Unprotect-PwCsvValue (& $pick $r $script:CsvTitleColumns)
+        $title = & $clean (& $pick $r $script:CsvTitleColumns)
         $pw    = & $pick $r $script:CsvPasswordColumns
         if (-not $title) {
             # タイトルの列が無い（Firefox）ときは、URL のドメイン名にする
@@ -128,12 +136,15 @@ function Import-PwCsvRows($Rows, $Cfg, [string]$Path, [scriptblock]$Wrap = { par
         }
         if (-not $title -or -not $pw) { $skip++; continue }
         $fields = @{}
-        foreach ($f in @($cfg.Fields)) { $fields[$f.Name] = Unprotect-PwCsvValue (& $pick $r (Get-PwCsvFieldColumns $f)) }
+        foreach ($f in @($cfg.Fields)) { $fields[$f.Name] = & $clean (& $pick $r (Get-PwCsvFieldColumns $f)) }
         $sec = ConvertTo-SecureString $pw -AsPlainText -Force
         & $Wrap { Save-PwEntry -Title $title -Fields $fields -Password $sec | Out-Null }
         $ok++
     }
-    Write-PwAudit 'IMPORT' "$Path ($ok 件)"
+    } catch {
+        # 途中で止まっても、それまでに登録した件数を知らせる（同じ CSV を取り込み直すと、その分が重複するため）
+        throw "$ok 件を取り込んだところで止まりました（残りの行は取り込んでいません。同じ CSV を取り込み直すと、取り込んだ $ok 件は重複します）。`n$($_.Exception.Message)"
+    } finally { Write-PwAudit 'IMPORT' "$Path ($ok 件)" }
     @{ Ok = $ok; Skip = $skip }
 }
 

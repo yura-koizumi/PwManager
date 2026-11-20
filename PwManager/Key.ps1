@@ -163,7 +163,9 @@ function Write-PwKeyFile([byte[]]$VaultKey, [securestring]$MasterPassword, $Reco
     Initialize-PwDataDir
     $tmp = "$($script:KeyPath).tmp"
     $j | ConvertTo-Json | Set-Content -LiteralPath $tmp -Encoding UTF8
-    Move-Item -LiteralPath $tmp -Destination $script:KeyPath -Force   # 書きかけのファイルを残さない
+    # 書きかけのファイルを残さない。すでにあれば File.Replace で一度に入れ替える（消してから置く間に止まっても、鍵を失わない）
+    if (Test-Path -LiteralPath $script:KeyPath) { [IO.File]::Replace($tmp, $script:KeyPath, [NullString]::Value) }   # $null だと空文字になり、パスの誤りになる
+    else { Move-Item -LiteralPath $tmp -Destination $script:KeyPath }
 }
 
 function Get-PwVaultKey([securestring]$MasterPassword) {
@@ -254,10 +256,12 @@ function New-PwRecoveryKey {
         Set-Content -LiteralPath $script:KeyPath -Value $oldFile -Encoding UTF8 -NoNewline
         throw "作り直せませんでした（保管庫はそのままです）。退避ファイル: $safety`n$($_.Exception.Message)"
     } finally { Clear-PwBytes $old }
-    Unlock-PwVault $set.StorePassword
+    # 保管庫はもう新しい鍵になっているので、このあとで失敗しても回復キーを失わないよう、先に表示する
+    $file = Show-PwRecoveryKey $set.RecoveryKey
     if ($safety) { Remove-Item -LiteralPath $safety -Force -ErrorAction SilentlyContinue }
     Write-PwAudit 'REKEY' '保管庫キーと回復キーを作り直し'
-    Show-PwRecoveryKey $set.RecoveryKey
+    Unlock-PwVault $set.StorePassword
+    $file
 }
 
 #endregion

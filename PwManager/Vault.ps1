@@ -153,12 +153,15 @@ function ConvertTo-PwQuery([string]$Query, $Cfg) {
 }
 
 function Test-PwMatch($Entry, $Terms, $Cfg) {
-    # すべての語が含まれれば一致（大文字小文字は区別しない）。項目を指定しない語は、タイトルかいずれかの項目に含まれればよい
+    # すべての語が含まれれば一致。項目を指定しない語は、タイトルかいずれかの項目に含まれればよい。
+    # 画面の検索と同じく、大文字小文字・全角半角・ひらがなカタカナは区別しない
+    $cmp = [Globalization.CultureInfo]::InvariantCulture.CompareInfo
+    $opt = [Globalization.CompareOptions]'IgnoreCase, IgnoreKanaType, IgnoreWidth'
     foreach ($term in @($Terms)) {
         $texts = if ($term.Field) { @($Entry.($term.Field)) } else { @($Entry.Title) + @(foreach ($f in @($Cfg.Fields)) { $Entry.($f.Name) }) }
         $hit = $false
         foreach ($t in $texts) {
-            if ($t -and ([string]$t).IndexOf($term.Text, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $hit = $true; break }
+            if ($t -and $cmp.IndexOf([string]$t, $term.Text, $opt) -ge 0) { $hit = $true; break }
         }
         if (-not $hit) { return $false }
     }
@@ -343,9 +346,10 @@ function Remove-PwEntry {
         $m = $info[0].Metadata
         $title = if ($m -and $m.ContainsKey('Title')) { [string]$m['Title'] } else { $Name }
         if ($PSCmdlet.ShouldProcess($title, '削除')) {
-            Use-PwVault { Remove-Secret -Vault $cfg.VaultName -Name $Name }
+            # 変更前のパスワードを先に消す（逆の順だと、途中で失敗したとき、一覧に出ないパスワードだけが残るため）
             $prev = Get-PwPreviousName $Name
-            if (@(Get-PwSecretInfo $prev).Count) { Use-PwVault { Remove-Secret -Vault $cfg.VaultName -Name $prev } }   # 変更前のパスワードも消す
+            if (@(Get-PwSecretInfo $prev).Count) { Use-PwVault { Remove-Secret -Vault $cfg.VaultName -Name $prev } }
+            Use-PwVault { Remove-Secret -Vault $cfg.VaultName -Name $Name }
             Write-PwAudit 'DELETE' "[$Name]"
         }
     }

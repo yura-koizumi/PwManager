@@ -6,10 +6,16 @@
 # （2 つのプロセスが同じ保管庫ファイルに書くと、片方の変更が失われるおそれがあるため）。
 
 function Resolve-PwEntry([string]$Query) {
-    # 検索語からエントリを 1 件に決める。タイトルが完全に一致すればそれ、候補が複数なら選んでもらう
-    $hits = @(Get-PwEntry -Filter $Query -All)
-    $exact = @($hits | Where-Object { $_.Title -eq $Query })
-    if ($exact.Count -eq 1) { $hits = $exact }
+    # 検索語からエントリを 1 件に決める。タイトルが完全に一致すればそれ、候補が複数なら選んでもらう。
+    # タイトルの一致は検索語の解釈より先に見る（「Id:123」のように「項目:文字」に見えるタイトルも指定できるように）
+    if (-not $Query.Trim()) { throw '検索語を入力してください。' }
+    $cfg = Get-PwConfig
+    $all = @(Get-PwEntry -All)
+    $exact = @($all | Where-Object { $_.Title -eq $Query })
+    $hits = @(if ($exact.Count -ge 1) { $exact } else {
+        $terms = @(ConvertTo-PwQuery $Query $cfg)
+        $all | Where-Object { Test-PwMatch $_ $terms $cfg }
+    })
     if ($hits.Count -eq 0) { throw "「$Query」に一致するエントリはありません。" }
     if ($hits.Count -eq 1) { return $hits[0] }
     $hits | Out-GridView -Title "「$Query」に一致するエントリが $($hits.Count) 件あります。対象を選んで [OK] を押してください" -OutputMode Single
@@ -25,6 +31,7 @@ function ConvertTo-PwFieldValues([hashtable]$Fields) {
     # -Fields のキーは項目の Name でも Label（画面の表示名）でもよい。保存用に Name へそろえる
     $cfg = Get-PwConfig
     $out = @{}
+    if (-not $Fields) { return $out }
     foreach ($k in @($Fields.Keys)) {
         $def = @($cfg.Fields | Where-Object { $_.Name -eq $k -or $_.Label -eq $k }) | Select-Object -First 1
         if (-not $def) { throw "項目 '$k' は設定にありません。使える項目: $(($cfg.Fields | ForEach-Object Name) -join ', ')" }
@@ -47,6 +54,7 @@ function Read-PwEntryPassword {
 function Get-PwNewSecret([securestring]$Password, [switch]$Generate, [switch]$Prompt) {
     # -Password / -Generate / 入力 のどれかでパスワードを決める（どれも無ければ $null）
     if ($Generate -and $Password) { throw '-Password と -Generate は同時に指定できません。' }
+    if ($Password -and $Password.Length -eq 0) { throw '-Password が空です。' }
     if ($Generate) { return New-PwPassword -AsSecureString }
     if ($Password) { return $Password }
     if ($Prompt) { return Read-PwEntryPassword }

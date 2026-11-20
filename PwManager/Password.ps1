@@ -43,7 +43,7 @@ function New-PwPassword {
         [switch]$AsSecureString
     )
     $g = (Get-PwConfig).PasswordGenerator
-    if (-not $Length) { $Length = [int]$g.Length }
+    if (-not $PSBoundParameters.ContainsKey('Length')) { $Length = [int]$g.Length }
     if ($Length -lt $script:PasswordMinLength -or $Length -gt $script:PasswordMaxLength) {
         throw "パスワードの長さは $($script:PasswordMinLength)〜$($script:PasswordMaxLength) 文字にしてください。"
     }
@@ -57,6 +57,9 @@ function New-PwPassword {
             # 英数字・空白・制御文字は記号として扱わない（重複も除く）
             $sym = -join @($sym.ToCharArray() | Where-Object { $_ -match '[\p{P}\p{S}]' -and [int]$_ -lt 128 } | Select-Object -Unique)
             if ($sym) { $sets += $sym }
+            elseif ($PSBoundParameters.ContainsKey('SymbolChars')) {
+                throw '-SymbolChars に記号がありません（英数字・空白・全角文字は記号として使いません）。記号を使わないときは -NoSymbols を指定してください。'
+            }
         }
     }
     if ($Length -lt $sets.Count) { throw "この文字の種類では、長さを $($sets.Count) 文字以上にしてください。" }

@@ -15,6 +15,10 @@ function Save-PwArchive([string]$Zip) {
             $paths += $rec
         }
         Compress-Archive -LiteralPath $paths -DestinationPath $Zip -CompressionLevel Optimal
+    } catch {
+        # 書きかけの ZIP を残さない（正しいバックアップに見えて、戻すときに失敗するため）
+        Remove-Item -LiteralPath $Zip -Force -ErrorAction SilentlyContinue
+        throw
     } finally { Remove-Item -LiteralPath $tmp -Recurse -Force -ErrorAction SilentlyContinue }
 }
 

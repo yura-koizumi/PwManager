@@ -28,7 +28,17 @@ function Get-PwConfig {
     if (Test-Path -LiteralPath $script:ConfigPath) {
         try { $user = Read-PwJson $script:ConfigPath }
         catch { throw "設定ファイルの書式が正しくありません。`n$($script:ConfigPath)`n$($_.Exception.Message)" }
-        if ($user) { foreach ($p in $user.PSObject.Properties) { $cfg[$p.Name] = $p.Value } }
+        if ($user) {
+            foreach ($p in $user.PSObject.Properties) {
+                $d = $cfg[$p.Name]
+                if ($d -is [pscustomobject] -and $p.Value -is [pscustomobject]) {
+                    # PasswordGenerator のような入れ子の設定も、書いた項目だけを上書きする（書かなかった項目は既定値のまま）
+                    $merged = $d.PSObject.Copy()
+                    foreach ($q in $p.Value.PSObject.Properties) { $merged | Add-Member -NotePropertyName $q.Name -NotePropertyValue $q.Value -Force }
+                    $cfg[$p.Name] = $merged
+                } else { $cfg[$p.Name] = $p.Value }   # Fields・Categories などの一覧は、書いたもので置き換える
+            }
+        }
     }
 
     # 画面は有効期限の 60 秒前に再入力を求めるので、それより短いと開くたびに求め続けてしまう

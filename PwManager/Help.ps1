@@ -27,7 +27,9 @@ function Get-PwHelp {
     [CmdletBinding()]
     param([Parameter(Position = 0)][string]$Name)
     if ($Name) {
-        $cmd = @($script:HelpGroups.Values | ForEach-Object { $_ } | Where-Object { $_ -like "*$Name*" })
+        if ($Name -eq 'pwm') { $Name = 'Show-PwManager' }   # 一覧では別名の pwm で表示している
+        $pattern = '*' + [WildcardPattern]::Escape($Name) + '*'
+        $cmd = @($script:HelpGroups.Values | ForEach-Object { $_ } | Where-Object { $_ -like $pattern })
         $exact = @($cmd | Where-Object { $_ -eq $Name }); if ($exact.Count -eq 1) { $cmd = $exact }
         if ($cmd.Count -ne 1) { throw "「$Name」に当たるコマンドが $($cmd.Count) 件です: $($cmd -join ', ')" }
         return Get-Help $cmd[0] -Detailed   # 概要・引数の説明・例
