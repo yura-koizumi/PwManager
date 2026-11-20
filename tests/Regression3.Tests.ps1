@@ -46,4 +46,15 @@ $err = $null; try { Get-PwHelp 'xyz' } catch { $err = $_ }
 Check 'Get-PwHelp で当たるコマンドが無ければ、そう知らせる' ($err -and $err.Exception.Message -match 'ありません')
 Check 'Get-PwEntry -IncludeTotalCount にも説明がある' ((Get-Help Get-PwEntry -Parameter IncludeTotalCount).Description.Text -match '件数')
 
+Write-Host '回復キーの保存先（OneDrive で同期されるデスクトップを避ける）'
+$env:OneDriveCommercial = 'C:\Users\u\OneDrive - Contoso'
+$d = & $Pwm { Get-PwRecoveryKeyDir -Desktop 'C:\Users\u\Desktop' -Downloads 'C:\Users\u\Downloads' -UserProfile 'C:\Users\u' }
+Check '同期されていなければ、デスクトップ' ($d.Path -eq 'C:\Users\u\Desktop' -and -not $d.Synced)
+$d = & $Pwm { Get-PwRecoveryKeyDir -Desktop 'C:\Users\u\OneDrive - Contoso\デスクトップ' -Downloads 'C:\Users\u\Downloads' -UserProfile 'C:\Users\u' }
+Check 'デスクトップが OneDrive の中なら、ダウンロード' ($d.Path -eq 'C:\Users\u\Downloads' -and $d.Synced)
+$d = & $Pwm { Get-PwRecoveryKeyDir -Desktop 'C:\Users\u\OneDrive - Contoso\Desktop' -Downloads 'C:\Users\u\OneDrive - Contoso\Downloads' -UserProfile 'C:\Users\u' }
+Check 'ダウンロードも同期されていれば、ユーザーのフォルダー' ($d.Path -eq 'C:\Users\u' -and $d.Synced)
+$env:OneDriveCommercial = $null
+Check '環境変数が無くても、パスに OneDrive を含めば同期とみなす' ((& $Pwm { Test-PwSyncedPath 'D:\OneDrive\Desktop' }) -and -not (& $Pwm { Test-PwSyncedPath 'C:\Users\u\Desktop' }))
+
 Complete-Test

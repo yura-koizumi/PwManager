@@ -199,15 +199,41 @@ function New-PwVaultKeySet([securestring]$MasterPassword) {
     } finally { Clear-PwBytes $vk $rb }
 }
 
+function Test-PwSyncedPath([string]$Path) {
+    # OneDrive で同期されるフォルダーの中か（会社の PC では、デスクトップやドキュメントが OneDrive に移されていることが多い）
+    if (-not $Path) { return $false }
+    $p = $Path.TrimEnd('\') + '\'
+    foreach ($root in $env:OneDrive, $env:OneDriveCommercial, $env:OneDriveConsumer) {
+        if ($root -and $p.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    $p -match '\\OneDrive( - [^\\]+)?\\'
+}
+
+function Get-PwRecoveryKeyDir {
+    <# 回復キーのファイルを置くフォルダー。デスクトップが OneDrive などで同期されていれば、同期されない
+       ダウンロード、それも同期されていればユーザーのフォルダー（C:\Users\<名前>）にする。
+       回復キーがクラウドに上がると、バックアップの ZIP と一緒に手に入れた人に開かれてしまうため。
+       @{ Path = フォルダー; Synced = デスクトップが同期されていて、別の場所にしたか } を返す。 #>
+    param(
+        [string]$Desktop = [Environment]::GetFolderPath('Desktop'),
+        [string]$Downloads = $(try { (New-Object -ComObject Shell.Application).Namespace('shell:Downloads').Self.Path } catch { '' }),
+        [string]$UserProfile = $env:USERPROFILE
+    )
+    if (-not (Test-PwSyncedPath $Desktop)) { return @{ Path = $Desktop; Synced = $false } }
+    if ($Downloads -and -not (Test-PwSyncedPath $Downloads)) { return @{ Path = $Downloads; Synced = $true } }
+    @{ Path = $UserProfile; Synced = $true }
+}
+
 function Show-PwRecoveryKey($KeySet) {
-    # 回復キー（New-PwVaultKeySet の RecoveryKey）を画面に表示し、デスクトップのテキストファイルにも出す。
+    # 回復キー（New-PwVaultKeySet の RecoveryKey）を画面に表示し、デスクトップ（同期されていればダウンロードなど）のテキストファイルにも出す。
     # ファイルの場所を返す（書けなかったら $null）。
     # 保管庫はもう回復キーで作られているので、ファイルに書けなくても止めずに、画面の表示を必ず残す。
     # 回復キーは文字列で引数に渡さず、Write-Host・Set-Content も使わない（引数の値がログに残りうるため。Clipboard.ps1 の説明を参照）
     $Text = [string]$KeySet.RecoveryKey
     $Host.UI.WriteLine()
     $Host.UI.WriteLine([ConsoleColor]::Yellow, $Host.UI.RawUI.BackgroundColor, "  回復キー: $Text")
-    $dir = if ($script:RecoveryKeyDir) { $script:RecoveryKeyDir } else { [Environment]::GetFolderPath('Desktop') }
+    $place = if ($script:RecoveryKeyDir) { @{ Path = $script:RecoveryKeyDir; Synced = $false } } else { Get-PwRecoveryKeyDir }
+    $dir = $place.Path
     $path = Join-Path $dir ('PwManager-回復キー-{0}-{1}.txt' -f $env:COMPUTERNAME, (Get-PwNow 'yyyyMMdd-HHmmss'))
     $lines = @(
         'PwManager 回復キー'
@@ -226,6 +252,7 @@ function Show-PwRecoveryKey($KeySet) {
         return $null
     }
     Write-Host "  保存先  : $path"
+    if ($place.Synced) { Write-Host '  （デスクトップは OneDrive などで同期されているので、クラウドに上がらないよう、同期されないこの場所に保存しました）' -ForegroundColor Yellow }
     Write-Host '  印刷するか USB メモリーなどに移して、このファイルは PC から削除してください。'
     $path
 }
