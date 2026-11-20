@@ -24,7 +24,7 @@ $storeDir  = Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secretmanagement\
 $root      = Join-Path $env:LOCALAPPDATA 'Programs\PwManager'   # Install.ps1 と同じ
 $modules   = Join-Path $root 'Modules'
 $moduleDir = Join-Path $modules 'PwManager'
-$oldModuleDir = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PwManager'   # 以前の版の置き場所
+
 if (($env:PSModulePath -split ';') -notcontains $modules) { $env:PSModulePath = "$modules;$env:PSModulePath" }   # 一緒に入れた SecretManagement を使う
 $vaultName = 'PwVault'
 $configPath = Join-Path $dataDir 'config.json'
@@ -37,7 +37,7 @@ if (Test-Path -LiteralPath $configPath) {
 
 # 保管庫の中身を確かめるときに使うので、プログラムを消す前に読み込んでおく（このフォルダーのもの、なければインストール済みのもの）
 $pwm = $null
-foreach ($psd in (Join-Path $PSScriptRoot 'PwManager\PwManager.psd1'), (Join-Path $moduleDir 'PwManager.psd1'), (Join-Path $oldModuleDir 'PwManager.psd1')) {
+foreach ($psd in (Join-Path $PSScriptRoot 'PwManager\PwManager.psd1'), (Join-Path $moduleDir 'PwManager.psd1')) {
     if (Test-Path -LiteralPath $psd) {
         try { $pwm = Import-Module $psd -Force -PassThru -ErrorAction Stop; break } catch { }
     }
@@ -56,11 +56,12 @@ foreach ($dir in [Environment]::GetFolderPath('Desktop'), [Environment]::GetFold
 }
 
 # --- 2. プログラム -------------------------------------------------------------------
-$removed = $false
-foreach ($d in $moduleDir, $oldModuleDir) {
-    if (Test-Path -LiteralPath (Join-Path $d 'PwManager.psd1')) { Remove-Item -LiteralPath $d -Recurse -Force; Write-Host "[2/3] プログラムを削除しました: $d"; $removed = $true }
+if (Test-Path -LiteralPath $moduleDir) {
+    Remove-Item -LiteralPath $moduleDir -Recurse -Force
+    Write-Host "[2/3] プログラムを削除しました: $moduleDir"
+} else {
+    Write-Host '[2/3] プログラムはインストールされていません。'
 }
-if (-not $removed) { Write-Host '[2/3] プログラムはインストールされていません。' }
 
 # --- 3. 保管庫のデータと設定（既定では残す） ---------------------------------------------
 function Write-Kept {

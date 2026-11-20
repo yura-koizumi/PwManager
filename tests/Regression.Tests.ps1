@@ -63,19 +63,16 @@ Remove-Item -LiteralPath $cfgPath
 Write-Host '保管庫の登録（SecretStore の場所）'
 $global:Reg = New-Object System.Collections.Generic.List[string]
 function global:Get-Module { param([switch]$ListAvailable, $Name) [pscustomobject]@{ Name = $Name; Version = [version]'1.0.6'; ModuleBase = 'C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6'; Path = 'C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6\Microsoft.PowerShell.SecretStore.psd1' } }
-function global:Get-SecretVault { param($Name) [pscustomobject]@{ Name = 'PwVault'; IsDefault = $true; ModulePath = $global:VaultModulePath } }
-function global:Unregister-SecretVault { param($Name) $global:Reg.Add("unregister:$Name") }
-function global:Register-SecretVault { param($Name, $ModuleName, [switch]$DefaultVault) $global:Reg.Add("register:$Name default=$DefaultVault") }
-$global:VaultModulePath = 'C:\Users\x\OneDrive\Documents\WindowsPowerShell\Modules\Microsoft.PowerShell.SecretStore\1.0.6'
+function global:Register-SecretVault { param($Name, $ModuleName, [switch]$DefaultVault) $global:Reg.Add("register:$Name module=$ModuleName default=$DefaultVault") }
+function global:Get-SecretVault { param($Name) if ($global:Registered) { [pscustomobject]@{ Name = 'PwVault'; IsDefault = $true } } }
+$global:Registered = $false
 & $Pwm { Register-PwVaultIfMissing (Get-PwConfig) } 6>$null
-Check 'Documents など別の場所の SecretStore で登録されていたら、登録し直す（既定の保管庫のまま）' (($global:Reg -join '|') -eq 'unregister:PwVault|register:PwVault default=True')
-$global:Reg.Clear()
-$global:VaultModulePath = 'C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6'
+Check '登録されていなければ、SecretStore を psd1 の場所で指定して登録する（PSModulePath の順番に左右されない）' (($global:Reg -join '|') -eq 'register:PwVault module=C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6\Microsoft.PowerShell.SecretStore.psd1 default=True')
+$global:Reg.Clear(); $global:Registered = $true
 & $Pwm { Register-PwVaultIfMissing (Get-PwConfig) } 6>$null
-Check '同じ場所の SecretStore で登録されていれば、何もしない' ($global:Reg.Count -eq 0)
+Check '登録済みなら何もしない' ($global:Reg.Count -eq 0)
 Remove-Item function:\Get-Module
 function global:Get-SecretVault { [pscustomobject]@{ Name = 'PwVault'; IsDefault = $true } }
-
 Write-Host '削除'
 $n = & $Pwm { Save-PwEntry -Title '消すもの' -Password (S 'old') }
 [void](& $Pwm { param($n) Save-PwEntry -Name $n -Title '消すもの' -Password (S 'new') } $n)

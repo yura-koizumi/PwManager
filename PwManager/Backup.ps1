@@ -101,7 +101,7 @@ function Restore-PwVault {
         $src = Join-Path $tmp 'secretmanagement\localstore'
         $recFile = Join-Path $tmp 'recovery.json'
         if (-not (Test-Path -LiteralPath $src)) { throw 'このファイルには保管庫データ (secretmanagement\localstore) が含まれていません。' }
-        if (-not (Test-Path -LiteralPath $recFile)) { throw 'このファイルには回復キーで開くための情報 (recovery.json) がありません（以前のベータ版のバックアップです）。' }
+        if (-not (Test-Path -LiteralPath $recFile)) { throw 'このファイルには回復キーで開くための情報 (recovery.json) がありません（PwManager のバックアップではありません）。' }
         $rec = (Read-PwJson $recFile).Recovery
 
         if (-not $RecoveryKey) { $RecoveryKey = Read-Host '回復キー（4 文字ずつ 8 組）' -AsSecureString }

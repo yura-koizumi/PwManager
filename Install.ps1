@@ -98,12 +98,6 @@ if ($gpo) {
 # --- 3. プログラムを配置 ------------------------------------------------------------------
 $src = Join-Path $PSScriptRoot 'PwManager'
 $dst = Join-Path $modules 'PwManager'
-# 以前の版は Documents の下に置いていた。残しておくと同期で書き換えられうるので消す（データは別の場所なので影響しない）
-$oldDst = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules\PwManager'
-if ((Test-Path -LiteralPath (Join-Path $oldDst 'PwManager.psd1')) -and $oldDst.TrimEnd('\') -ne $dst.TrimEnd('\')) {
-    Remove-Item -LiteralPath $oldDst -Recurse -Force
-    Write-Host "      以前の場所のプログラムを削除しました: $oldDst"
-}
 if ((Resolve-Path $src).Path.TrimEnd('\') -ne $dst.TrimEnd('\')) {
     New-Item -ItemType Directory -Path $modules -Force | Out-Null
     # 入れ直しのとき、コピーに失敗しても今のプログラムが消えたままにならないよう、先に横へコピーしてから入れ替える

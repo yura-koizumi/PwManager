@@ -2,7 +2,7 @@
 #   -Locked : ロックしたあとに起動し直したところ
 param([switch]$Locked)
 try {
-    # PwManager と一緒に入れた SecretManagement / SecretStore を先に使う（Documents など、ほかの場所のものを読み込まない）
+    # PwManager と一緒に入れた SecretManagement / SecretStore を先に使う（ほかの場所に入っているものを読み込まない）
     $modules = Split-Path -Parent $PSScriptRoot
     if (($env:PSModulePath -split ';') -notcontains $modules) { $env:PSModulePath = "$modules;$env:PSModulePath" }
     Import-Module (Join-Path $PSScriptRoot 'PwManager.psd1') -Force -ErrorAction Stop

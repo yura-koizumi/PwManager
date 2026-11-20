@@ -23,7 +23,7 @@ function Initialize-PwManager {
     if (Test-Path -LiteralPath (Join-Path $script:StoreRoot 'localstore')) {
         if (-not (Test-Path -LiteralPath $script:KeyPath)) {
             throw ("保管庫はありますが、保管庫キーのファイルがありません: $($script:KeyPath)`n" +
-                   'バックアップがあれば Restore-PwVault で復元してください。以前のベータ版で作った保管庫なら、Uninstall.bat でデータを削除してから、もう一度インストールしてください。')
+                   'バックアップがあれば Restore-PwVault で復元してください。無ければ Uninstall.bat でデータを削除してから、もう一度インストールしてください。')
         }
         Write-Host '既存の保管庫を使います（マスターパスワードはこれまでと同じです）。'
         return
@@ -60,7 +60,8 @@ function Install-PwShortcut {
         $lnk = $shell.CreateShortcut((Join-Path $dir 'PwManager.lnk'))
         $lnk.TargetPath       = $cmd.File
         $lnk.Arguments        = $cmd.Arguments
-        $lnk.WorkingDirectory = $script:ModuleRoot
+        # 起動した画面がプログラムのフォルダーを「使用中」にしないよう、作業フォルダーはユーザーのフォルダーにする
+        $lnk.WorkingDirectory = $env:USERPROFILE
         $lnk.IconLocation     = (Join-Path $env:SystemRoot 'System32\shell32.dll') + ',47'
         $lnk.Description      = 'PwManager パスワード管理'
         $lnk.Save()

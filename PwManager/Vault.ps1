@@ -12,29 +12,18 @@ function Test-PwLockedError($ErrorRecord) {
 }
 
 function Register-PwVaultIfMissing($Cfg) {
-    # 保管庫を SecretManagement に登録する。SecretManagement は登録したときの SecretStore の場所を覚えていて、そこから読み込む。
-    # 今使う SecretStore（PwManager と同じ場所に入れたもの）と違う場所で登録されていれば、登録し直す
-    # （Documents の下は OneDrive で同期されることがあり、そこにあるプログラムを書き換えられると、パスワードを盗まれうるため）。
-    # 登録し直しても、保管庫のデータ（localstore）はそのまま。
-    $vault = Get-SecretVault -Name $Cfg.VaultName -ErrorAction SilentlyContinue
+    # 保管庫を SecretManagement に登録する（登録済みなら何もしない）。SecretManagement は、登録したときの SecretStore の場所から読み込む。
     # PwManager と同じ場所（Modules フォルダー）にある SecretStore を使う。無ければ（開発中など）PowerShell が見つけるもの。
-    # PSModulePath の順番に左右されないよう、登録するときも psd1 の場所で指定する
+    # PSModulePath の順番に左右されないよう、psd1 の場所で指定する
+    if (Get-SecretVault -Name $Cfg.VaultName -ErrorAction SilentlyContinue) { return }
     $mine = Split-Path -Parent $script:ModuleRoot
     $stores = @(Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretStore)
     $store = @($stores | Where-Object { $_.ModuleBase.StartsWith($mine + '\', [StringComparison]::OrdinalIgnoreCase) } |
                Sort-Object Version -Descending) + $stores | Select-Object -First 1
-    $wasDefault = $null
-    if ($vault -and $store -and $vault.ModulePath -and -not ([string]$vault.ModulePath).StartsWith($store.ModuleBase, [StringComparison]::OrdinalIgnoreCase)) {
-        $wasDefault = $vault.IsDefault
-        Unregister-SecretVault -Name $Cfg.VaultName
-        $vault = $null
-    }
-    if (-not $vault) {
-        $default = if ($null -ne $wasDefault) { $wasDefault } else { @(Get-SecretVault -ErrorAction SilentlyContinue | Where-Object { $_.IsDefault }).Count -eq 0 }
-        $module = if ($store) { $store.Path } else { 'Microsoft.PowerShell.SecretStore' }
-        Register-SecretVault -Name $Cfg.VaultName -ModuleName $module -DefaultVault:$default
-        Write-Host "保管庫 '$($Cfg.VaultName)' を登録しました。"
-    }
+    $default = @(Get-SecretVault -ErrorAction SilentlyContinue | Where-Object { $_.IsDefault }).Count -eq 0
+    $module = if ($store) { $store.Path } else { 'Microsoft.PowerShell.SecretStore' }
+    Register-SecretVault -Name $Cfg.VaultName -ModuleName $module -DefaultVault:$default
+    Write-Host "保管庫 '$($Cfg.VaultName)' を登録しました。"
 }
 
 function Unlock-PwVault([securestring]$StorePassword) {
