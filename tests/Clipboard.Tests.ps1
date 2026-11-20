@@ -14,14 +14,14 @@ try {
 
     $seq = & $Pwm { Set-PwClipboard -Text 'Secret-3' -Sensitive }
     $CB::SetText('Secret-3')   # ほかのアプリが同じ内容を置き直した状態
-    $h = & $Pwm { Get-PwTextHash 'Secret-3' }
+    $h = & $Pwm { Get-PwTextHash (S 'Secret-3') }
     Check '同じ内容が置き直されても、ハッシュ併用なら消す' (& $Pwm { param($s, $h) Clear-PwClipboardIfMatch $s $h } $seq $h)
 
     Write-Host '内容のハッシュ（鍵付き）'
-    $h1 = & $Pwm { Get-PwTextHash 'Secret-3' }
+    $h1 = & $Pwm { Get-PwTextHash (S 'Secret-3') }
     $plainSha = [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes('Secret-3')))
-    Check '同じプロセスでは同じ内容から同じハッシュ' ($h1 -eq (& $Pwm { Get-PwTextHash 'Secret-3' }))
-    Check '内容が違えば違うハッシュ'               ($h1 -ne (& $Pwm { Get-PwTextHash 'Secret-4' }))
+    Check '同じプロセスでは同じ内容から同じハッシュ' ($h1 -eq (& $Pwm { Get-PwTextHash (S 'Secret-3') }))
+    Check '内容が違えば違うハッシュ'               ($h1 -ne (& $Pwm { Get-PwTextHash (S 'Secret-4') }))
     Check '鍵なしの SHA-256 とは違う（ハッシュから元の値を割り出せない）' ($h1 -ne $plainSha)
 
     Write-Host 'コンソールからのコピー（別プロセスで消去）'

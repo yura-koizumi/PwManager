@@ -67,12 +67,17 @@ Check '回復キーが 1 文字でも違えば取り出せない' ($err -and $er
 Write-Host '回復キーのファイル（Show-PwRecoveryKey）'
 $keyDir = Join-Path $TestRoot 'Desktop'; New-Item -ItemType Directory -Path $keyDir | Out-Null
 & $Pwm { param($d) $script:RecoveryKeyDir = $d } $keyDir
-$file = & $Pwm { param($t) Show-PwRecoveryKey $t } $text 6>$null
+$file = & $Pwm { param($t) Show-PwRecoveryKey @{ RecoveryKey = $t } } $text 6>$null
 Check 'デスクトップ（の代わりのフォルダー）にテキストファイルを出す' ((Split-Path $file) -eq $keyDir -and (Get-Content -LiteralPath $file -Raw -Encoding UTF8) -match [regex]::Escape($text))
 Check 'PC から削除するよう書いておく' ((Get-Content -LiteralPath $file -Raw -Encoding UTF8) -match 'PC から削除')
 & $Pwm { param($d) $script:RecoveryKeyDir = $d } (Join-Path $TestRoot 'no-such-folder')
-$shown = & $Pwm { param($t) Show-PwRecoveryKey $t } $text 6>&1 3>&1 | Out-String
-Check 'ファイルに書けなくても止めずに、回復キーを画面に表示して知らせる' ($shown -match [regex]::Escape($text) -and $shown -match '保存できませんでした')
+# 回復キーそのものは $Host.UI に直接書く（ログに残らないように）ので、ここでは警告と戻り値を確かめる
+$out = @(& $Pwm { param($t) Show-PwRecoveryKey @{ RecoveryKey = $t } } $text 3>&1 6>$null)
+$warn = @($out | Where-Object { $_ -is [System.Management.Automation.WarningRecord] })
+$ret  = @($out | Where-Object { $_ -isnot [System.Management.Automation.WarningRecord] -and $null -ne $_ })
+Check 'ファイルに書けなくても止めずに知らせる（画面に表示した回復キーを書き留めるよう）' ($ret.Count -eq 0 -and "$($warn[0])" -match '保存できませんでした')
+$src = (& $Pwm { ${function:Show-PwRecoveryKey}.ToString() }) -split "`n" | Where-Object { $_ -notmatch '^\s*#' } | Out-String   # コメントは除く
+Check '回復キーを Write-Host や Set-Content に渡さない（引数の値がログに残りうるため）' ($src -notmatch 'Write-Host[^\r\n]*\$Text' -and $src -notmatch 'Set-Content')
 & $Pwm { param($d) $script:RecoveryKeyDir = $d } $keyDir
 
 Write-Host '保管庫キーと回復キーの作り直し（New-PwRecoveryKey）'

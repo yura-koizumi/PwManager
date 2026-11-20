@@ -199,11 +199,14 @@ function New-PwVaultKeySet([securestring]$MasterPassword) {
     } finally { Clear-PwBytes $vk $rb }
 }
 
-function Show-PwRecoveryKey([string]$Text) {
-    # 回復キーを画面に表示し、デスクトップのテキストファイルにも出す。ファイルの場所を返す（書けなかったら $null）。
-    # 保管庫はもう回復キーで作られているので、ファイルに書けなくても止めずに、画面の表示を必ず残す
-    Write-Host ''
-    Write-Host "  回復キー: $Text" -ForegroundColor Yellow
+function Show-PwRecoveryKey($KeySet) {
+    # 回復キー（New-PwVaultKeySet の RecoveryKey）を画面に表示し、デスクトップのテキストファイルにも出す。
+    # ファイルの場所を返す（書けなかったら $null）。
+    # 保管庫はもう回復キーで作られているので、ファイルに書けなくても止めずに、画面の表示を必ず残す。
+    # 回復キーは文字列で引数に渡さず、Write-Host・Set-Content も使わない（引数の値がログに残りうるため。Clipboard.ps1 の説明を参照）
+    $Text = [string]$KeySet.RecoveryKey
+    $Host.UI.WriteLine()
+    $Host.UI.WriteLine([ConsoleColor]::Yellow, $Host.UI.RawUI.BackgroundColor, "  回復キー: $Text")
     $dir = if ($script:RecoveryKeyDir) { $script:RecoveryKeyDir } else { [Environment]::GetFolderPath('Desktop') }
     $path = Join-Path $dir ('PwManager-回復キー-{0}-{1}.txt' -f $env:COMPUTERNAME, (Get-PwNow 'yyyyMMdd-HHmmss'))
     $lines = @(
@@ -217,7 +220,7 @@ function Show-PwRecoveryKey([string]$Text) {
         '・印刷するか USB メモリーなどに移して、このファイルは PC から削除してください。'
         '  PC に残すと、保管庫と一緒に持ち出されたときに開かれてしまいます。バックアップの ZIP とも別の場所に保管してください。'
     )
-    try { $lines | Set-Content -LiteralPath $path -Encoding UTF8 -ErrorAction Stop }
+    try { [IO.File]::WriteAllLines($path, [string[]]$lines, (New-Object Text.UTF8Encoding $true)) }
     catch {
         Write-Warning "回復キーをファイルに保存できませんでした（$($_.Exception.Message)）。上の回復キーを書き留めてください。"
         return $null
@@ -257,7 +260,7 @@ function New-PwRecoveryKey {
         throw "作り直せませんでした（保管庫はそのままです）。退避ファイル: $safety`n$($_.Exception.Message)"
     } finally { Clear-PwBytes $old }
     # 保管庫はもう新しい鍵になっているので、このあとで失敗しても回復キーを失わないよう、先に表示する
-    $file = Show-PwRecoveryKey $set.RecoveryKey
+    $file = Show-PwRecoveryKey $set
     if ($safety) { Remove-Item -LiteralPath $safety -Force -ErrorAction SilentlyContinue }
     Write-PwAudit 'REKEY' '保管庫キーと回復キーを作り直し'
     Unlock-PwVault $set.StorePassword

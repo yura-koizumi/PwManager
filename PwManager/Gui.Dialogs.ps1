@@ -90,7 +90,7 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
             $err.Text = "パスワードの入力に続けて失敗したため、あと $left 秒待ってから入力してください。"
             return
         }
-        $sec = ConvertTo-SecureString $tb.Text -AsPlainText -Force
+        $sec = [Net.NetworkCredential]::new('', $tb.Text).SecurePassword   # ConvertTo-SecureString -AsPlainText は引数がログに残りうる
         $tb.Clear()
         $dlg.UseWaitCursor = $true
         try {
@@ -163,7 +163,7 @@ function Show-PwChangePasswordDialog($ui) {
         $sec = @{}
         foreach ($k in $boxes.Keys) {
             # 確認欄が空でも比較できるよう、空のときは空の SecureString にする
-            $sec[$k] = if ($boxes[$k].Text) { ConvertTo-SecureString $boxes[$k].Text -AsPlainText -Force } else { New-Object System.Security.SecureString }
+            $sec[$k] = if ($boxes[$k].Text) { [Net.NetworkCredential]::new('', $boxes[$k].Text).SecurePassword } else { New-Object System.Security.SecureString }
         }
         $problem = Test-PwMasterPasswordRule $sec['New'] $sec['Confirm'] $sec['Current']
         if ($problem) { $err.Text = $problem; return }
@@ -279,7 +279,7 @@ function Show-PwEditDialog($ui, $Entry, [switch]$Copy) {
             if ($isNew -and -not $pw.Text) { Show-PwMessage 'パスワードを入力してください（「生成」で自動作成もできます）。' 'Warn'; [void]$pw.Focus(); return }
             $fields = @{}
             foreach ($k in $inputs.Keys) { $fields[$k] = $inputs[$k].Text }
-            $sec  = if ($pw.Text) { ConvertTo-SecureString $pw.Text -AsPlainText -Force } else { $null }
+            $sec  = if ($pw.Text) { [Net.NetworkCredential]::new('', $pw.Text).SecurePassword } else { $null }
             $name = if ($Entry -and -not $Copy) { $Entry.Name } else { $null }
             $dlg.UseWaitCursor = $true
             try { $state.Saved = Invoke-PwVault $ui { Save-PwEntry -Name $name -Title $tt -Fields $fields -Password $sec } }

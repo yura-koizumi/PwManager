@@ -92,7 +92,45 @@ function Read-PwCsvRows([string]$Path, [string]$Encoding = 'Auto') {
         }
         [Array]::Clear($bytes, 0, $bytes.Length)
     }
-    , @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
+    $rows = @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
+    # パスワードの列は、読んだらすぐ SecureString にする（このあと行をコマンドに渡しても、パスワードがログに残らないように。
+    # Clipboard.ps1 の説明を参照）。.NET のメソッドで変換するので、変換そのものもログに残らない
+    foreach ($r in $rows) {
+        foreach ($p in $r.PSObject.Properties) {
+            if ($script:CsvPasswordColumns -contains $p.Name) {
+                $v = [string]$p.Value
+                $p.Value = if ($v) { [Net.NetworkCredential]::new('', $v).SecurePassword } else { $null }
+            }
+        }
+    }
+    $v = $null
+    , $rows
+}
+
+function Write-PwCsvFile([string]$Path, [string[]]$Columns, $Rows, [bool]$Bom) {
+    # CSV を書く。値はすべて "" で囲む（Export-Csv と同じ形）。SecureString の値は、書く直前に平文に戻す。
+    # Export-Csv・ConvertTo-Csv は、渡した行（パスワードを含む）が引数としてログに残りうるので使わない
+    $quote = { param([string]$s) '"' + $s.Replace('"', '""') + '"' }
+    $sb = New-Object Text.StringBuilder
+    [void]$sb.Append((@(foreach ($c in $Columns) { & $quote $c }) -join ',')).Append("`r`n")
+    foreach ($row in @($Rows)) {
+        $first = $true
+        foreach ($c in $Columns) {
+            if (-not $first) { [void]$sb.Append(',') }
+            $first = $false
+            $v = $row[$c]
+            if ($v -is [securestring]) {
+                $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($v)
+                try { [void]$sb.Append('"').Append([Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr).Replace('"', '""')).Append('"') }
+                finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+            } else {
+                [void]$sb.Append((& $quote ([string]$v)))
+            }
+        }
+        [void]$sb.Append("`r`n")
+    }
+    [IO.File]::WriteAllText($Path, $sb.ToString(), (New-Object Text.UTF8Encoding $Bom))
+    [void]$sb.Clear()
 }
 
 function Get-PwCsvUnknownColumns($Rows, $Cfg) {
@@ -127,7 +165,11 @@ function Import-PwCsvRows($Rows, $Cfg, [string]$Path, [scriptblock]$Wrap = { par
     try {
     foreach ($r in $rows) {
         $title = & $clean (& $pick $r $script:CsvTitleColumns)
-        $pw    = & $pick $r $script:CsvPasswordColumns
+        $pw = $null   # Read-PwCsvRows で SecureString にしてある
+        foreach ($k in $script:CsvPasswordColumns) {
+            $p = $r.PSObject.Properties[$k]
+            if ($p -and $p.Value -is [securestring] -and $p.Value.Length -gt 0) { $pw = $p.Value; break }
+        }
         if (-not $title) {
             # タイトルの列が無い（Firefox）ときは、URL のドメイン名にする
             $url = & $pick $r $urlColumns
@@ -137,8 +179,7 @@ function Import-PwCsvRows($Rows, $Cfg, [string]$Path, [scriptblock]$Wrap = { par
         if (-not $title -or -not $pw) { $skip++; continue }
         $fields = @{}
         foreach ($f in @($cfg.Fields)) { $fields[$f.Name] = & $clean (& $pick $r (Get-PwCsvFieldColumns $f)) }
-        $sec = ConvertTo-SecureString $pw -AsPlainText -Force
-        & $Wrap { Save-PwEntry -Title $title -Fields $fields -Password $sec | Out-Null }
+        & $Wrap { Save-PwEntry -Title $title -Fields $fields -Password $pw | Out-Null }
         $ok++
     }
     } catch {
@@ -181,9 +222,12 @@ function Export-PwCsv {
     if ($IncludePassword -and -not $PSCmdlet.ShouldProcess($Path, 'パスワードを平文で書き出す')) { return }
     $has = @{}
     foreach ($f in @($cfg.Fields)) { $has[$f.Name] = $true }
+    # パスワードは SecureString のまま行に入れ、Write-PwCsvFile が書く直前に平文に戻す
+    $columns = if ($chrome) { 'name', 'url', 'username', 'password', 'note' }
+               else { @('Title') + @(if ($IncludePassword) { 'Password' }) + @($cfg.Fields | ForEach-Object Name) + @('Updated') }
     $rows = foreach ($e in @(Get-PwEntry -All)) {
         if ($chrome) {
-            [pscustomobject][ordered]@{
+            @{
                 name     = $e.Title
                 url      = $(if ($has['Url']) { $e.Url } else { '' })
                 username = $(if ($has['Id']) { $e.Id } else { '' })
@@ -191,26 +235,16 @@ function Export-PwCsv {
                 note     = $(if ($has['Note']) { $e.Note } else { '' })
             }
         } else {
-            $h = [ordered]@{ Title = Protect-PwCsvValue $e.Title }
+            $h = @{ Title = Protect-PwCsvValue $e.Title; Updated = $e.Updated }
             if ($IncludePassword) { $h['Password'] = Get-PwPassword $e.Name }
             foreach ($f in @($cfg.Fields)) { $h[$f.Name] = Protect-PwCsvValue $e.($f.Name) }
-            $h['Updated'] = $e.Updated
-            [pscustomobject]$h
+            $h
         }
     }
     $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
-    if (-not $rows) {
-        # 0 件でも、列名の行だけは書く（空のファイルは、取り込む側で形式の誤りとして断られるため）
-        $header = if ($chrome) { 'name', 'url', 'username', 'password', 'note' }
-                  else { @('Title') + @(if ($IncludePassword) { 'Password' }) + @($cfg.Fields | ForEach-Object Name) + @('Updated') }
-        [IO.File]::WriteAllLines($full, [string[]]@(($header | ForEach-Object { '"' + $_ + '"' }) -join ','), (New-Object Text.UTF8Encoding (-not $chrome)))
-    } elseif ($chrome) {
-        # ブラウザーは先頭の BOM を列名の一部として読むことがあるので、BOM なしの UTF-8 で書く
-        $lines = [string[]]@(@($rows) | ConvertTo-Csv -NoTypeInformation)
-        [IO.File]::WriteAllLines($full, $lines, (New-Object Text.UTF8Encoding $false))
-    } else {
-        @($rows) | Export-Csv -LiteralPath $Path -NoTypeInformation -Encoding UTF8   # Excel で文字化けしないよう BOM 付き
-    }
+    # 0 件でも列名の行は書く（空のファイルは、取り込む側で形式の誤りとして断られるため）。
+    # Chrome 形式は BOM なし（ブラウザーは先頭の BOM を列名の一部として読むことがある）、既定の形は Excel で文字化けしないよう BOM 付き
+    Write-PwCsvFile $full $columns @($rows) (-not $chrome)
     Write-PwAudit $(if ($IncludePassword) { 'EXPORT+PW' } else { 'EXPORT' }) $Path
     if ($IncludePassword) { Write-Warning '平文のパスワードを含むファイルです。用が済んだらすぐに削除し、ごみ箱も空にしてください。' }
 }

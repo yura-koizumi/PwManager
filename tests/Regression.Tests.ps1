@@ -1,7 +1,7 @@
 ﻿# リリース前の確認（Sonnet による解析）で見つかった不具合が、再び起きないことを確かめる
 . (Join-Path $PSScriptRoot 'TestHelper.ps1')
 $global:Copied = $null
-& $Pwm { function script:Set-PwClipboard($Text, [switch]$Sensitive) { $global:Copied = $Text; 1 }; function script:Start-PwClipboardClearJob { } }
+& $Pwm { function script:Set-PwClipboard($Text, $Secret, [switch]$Sensitive) { $global:Copied = if ($Secret) { Plain $Secret } else { $Text }; 1 }; function script:Start-PwClipboardClearJob { } }
 
 Write-Host '対象の指定（Copy-PwField・Set-PwEntry・Remove-PwEntry）'
 [void](& $Pwm { Save-PwEntry -Title 'Id:123' -Fields @{ Id = 'x' } -Password (S 'pw-colon') })

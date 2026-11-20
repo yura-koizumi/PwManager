@@ -7,12 +7,25 @@ $script:ClipHashKey = New-Object byte[] 32
 $rng = [Security.Cryptography.RandomNumberGenerator]::Create(); $rng.GetBytes($script:ClipHashKey); $rng.Dispose()
 Remove-Variable rng
 
-function Get-PwTextHash([string]$Text) {
+# パスワードは、関数やコマンドの引数に平文の文字列で渡さない（SecureString で渡す）。
+# 会社などでモジュールのログ（イベント 4103）が有効だと、コマンドに渡した引数の値がイベントログに残るため。
+# 平文に戻すのは、クリップボード・ファイル・画面に渡す直前だけで、そこでは .NET のメソッドを直接呼ぶ（ログに残らない）。
+
+function ConvertFrom-PwSecret([securestring]$Secret) {
+    # SecureString を平文に戻す（戻り値はログに残らない。受け取った側は .NET のメソッドにだけ渡すこと）
+    if (-not $Secret) { return '' }
+    $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secret)
+    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr) }
+    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr) }
+}
+
+function Get-PwTextHash([securestring]$Secret) {
     # 同じプロセスの中でだけ比べられるハッシュ。作業用のバイト列は使い終わったらゼロで埋める
-    $bytes = [Text.Encoding]::UTF8.GetBytes($Text)
+    $chars = Get-PwSecureChars $Secret
+    $bytes = [Text.Encoding]::UTF8.GetBytes($chars)
     $hmac = [Security.Cryptography.HMACSHA256]::new($script:ClipHashKey)
     try { [BitConverter]::ToString($hmac.ComputeHash($bytes)) }
-    finally { [Array]::Clear($bytes, 0, $bytes.Length); $hmac.Dispose() }
+    finally { [Array]::Clear($bytes, 0, $bytes.Length); [Array]::Clear($chars, 0, $chars.Length); $hmac.Dispose() }
 }
 
 $script:ClipSeqSignature = '[DllImport("user32.dll")] public static extern uint GetClipboardSequenceNumber();'
@@ -25,12 +38,14 @@ function Get-PwClipboardSequence {
     [PwManagerNative.Clip]::GetClipboardSequenceNumber()
 }
 
-function Set-PwClipboard([string]$Text, [switch]$Sensitive) {
-    # コピーした直後のシーケンス番号を返す（消去時に、まだ自分のコピーが残っているかの判定に使う）
+function Set-PwClipboard([string]$Text, [securestring]$Secret, [switch]$Sensitive) {
+    # コピーした直後のシーケンス番号を返す（消去時に、まだ自分のコピーが残っているかの判定に使う）。
+    # パスワードは -Secret（SecureString）で渡す。ID などの項目は -Text
     Add-Type -AssemblyName System.Windows.Forms
     $cfg = Get-PwConfig
     $data = New-Object System.Windows.Forms.DataObject
-    $data.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $Text)
+    if ($Secret) { $Sensitive = $true; $data.SetData([System.Windows.Forms.DataFormats]::UnicodeText, (ConvertFrom-PwSecret $Secret)) }
+    else { $data.SetData([System.Windows.Forms.DataFormats]::UnicodeText, $Text) }
     if ($Sensitive -and $cfg.ExcludeFromClipboardHistory) {
         # Windows のクリップボード履歴(Win+V)・クラウド同期の対象外にする（Windows 標準の仕組み）
         foreach ($fmt in 'ExcludeClipboardContentFromMonitorProcessing', 'CanIncludeInClipboardHistory', 'CanUploadToCloudClipboard') {
@@ -50,8 +65,9 @@ function Clear-PwClipboardIfMatch([uint32]$Sequence, [string]$Hash) {
     try {
         $match = $Sequence -and (Get-PwClipboardSequence) -eq $Sequence
         if (-not $match -and $Hash) {
+            # 今のクリップボードの内容（パスワードかもしれない）は、SecureString にしてから渡す
             $cur = [System.Windows.Forms.Clipboard]::GetText()
-            $match = $cur -and (Get-PwTextHash $cur) -eq $Hash
+            $match = $cur -and (Get-PwTextHash ([Net.NetworkCredential]::new('', $cur).SecurePassword)) -eq $Hash
             $cur = $null
         }
         if ($match) { [System.Windows.Forms.Clipboard]::Clear(); return $true }
@@ -107,9 +123,9 @@ function Copy-PwField {
     if ($Previous) {
         $p = Get-PwPreviousPassword $entry.Name
         if (-not $p) { Write-Warning "「$($entry.Title)」には変更前のパスワードがありません。"; return }
-        $text = $p.Text; $sensitive = $true; $label = "変更前のパスワード（$($p.Replaced) まで使用）"
+        $secret = $p.Secret; $sensitive = $true; $label = "変更前のパスワード（$($p.Replaced) まで使用）"
     } elseif ($Field -in 'Password', 'PW', 'パスワード') {
-        $text = Get-PwPassword $entry.Name; $sensitive = $true; $label = 'パスワード'
+        $secret = Get-PwPassword $entry.Name; $sensitive = $true; $label = 'パスワード'
     } else {
         $def = @($cfg.Fields | Where-Object { $_.Name -eq $Field -or $_.Label -eq $Field }) | Select-Object -First 1
         if (-not $def) { throw "項目 '$Field' は設定にありません。使える項目: Password, $(($cfg.Fields | ForEach-Object Name) -join ', ')" }
@@ -117,7 +133,7 @@ function Copy-PwField {
         if (-not $text) { Write-Warning "「$($entry.Title)」の $label は空です。"; return }
     }
 
-    $seq = Set-PwClipboard -Text $text -Sensitive:$sensitive
+    $seq = if ($secret) { Set-PwClipboard -Secret $secret } else { Set-PwClipboard -Text $text -Sensitive:$sensitive }
     $sec = [int]$cfg.ClipboardClearSeconds
     if ($sensitive -and $sec -gt 0) {
         Start-PwClipboardClearJob $seq $sec

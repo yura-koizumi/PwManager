@@ -239,8 +239,9 @@ function Get-PwEntry {
 }
 
 function Get-PwPassword([string]$Name) {
+    # パスワードを SecureString で返す（平文にするのは、使う直前に ConvertFrom-PwSecret で。Clipboard.ps1 の説明を参照）
     $cfg = Get-PwConfig
-    Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $Name -AsPlainText }
+    Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $Name }
 }
 
 #region 変更前のパスワード
@@ -252,13 +253,13 @@ $script:PreviousPrefix = 'pwm-prev:'
 function Get-PwPreviousName([string]$Name) { $script:PreviousPrefix + $Name.Substring($script:SecretPrefix.Length) }
 
 function Get-PwPreviousPassword([string]$Name) {
-    # 変更前のパスワード @{ Text = 平文; Replaced = 変えた日時（文字列） } を返す（無ければ $null）
+    # 変更前のパスワード @{ Secret = SecureString; Replaced = 変えた日時（文字列） } を返す（無ければ $null）
     $cfg = Get-PwConfig
     $prev = Get-PwPreviousName $Name
     $info = @(Get-PwSecretInfo $prev)
     if ($info.Count -eq 0) { return $null }
     $m = $info[0].Metadata
-    @{ Text = (Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $prev -AsPlainText })
+    @{ Secret = (Use-PwVault { Get-Secret -Vault $cfg.VaultName -Name $prev })
        Replaced = $(if ($m -and $m.ContainsKey('Replaced')) { [string]$m['Replaced'] } else { '' }) }
 }
 

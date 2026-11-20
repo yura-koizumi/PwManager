@@ -1,12 +1,14 @@
 ﻿# Gui.Actions.ps1 - 画面の操作（コピー・登録・編集・削除・バックアップ・ロック）
 # （PwManager.psm1 から読み込まれる）
 
-function Set-PwUiClipboard($ui, [string]$Text, [bool]$Sensitive, [string]$What) {
-    $seq = Set-PwClipboard -Text $Text -Sensitive:$Sensitive
+function Set-PwUiClipboard($ui, $Value, [bool]$Sensitive, [string]$What) {
+    # $Value: パスワードは SecureString（平文の文字列を引数で回さない。Clipboard.ps1 の説明を参照）、ID などは文字列
+    if ($Value -is [securestring]) { $secret = $Value; $Sensitive = $true; $seq = Set-PwClipboard -Secret $secret }
+    else { $secret = [Net.NetworkCredential]::new('', [string]$Value).SecurePassword; $seq = Set-PwClipboard -Text $Value -Sensitive:$Sensitive }
     $sec = [int]$ui.Cfg.ClipboardClearSeconds
     if ($Sensitive -and $sec -gt 0) {
         $ui.ClipSeq  = $seq
-        $ui.ClipHash = Get-PwTextHash $Text
+        $ui.ClipHash = Get-PwTextHash $secret
         $ui.ClipExpire = (Get-Date).AddSeconds($sec)
         Set-PwUiStatus $ui "$What をコピーしました（$sec 秒後に消去）"
     } else {
@@ -18,15 +20,15 @@ function Set-PwUiClipboard($ui, [string]$Text, [bool]$Sensitive, [string]$What) 
 
 function Copy-PwUiPassword($ui) {
     $e = Get-PwUiSelected $ui; if (-not $e) { return }
-    $text = Invoke-PwVault $ui { Get-PwPassword $e.Name }
-    Set-PwUiClipboard $ui $text $true "「$($e.Title)」のパスワード"
+    $secret = Invoke-PwVault $ui { Get-PwPassword $e.Name }
+    Set-PwUiClipboard $ui $secret $true "「$($e.Title)」のパスワード"
 }
 
 function Copy-PwUiPreviousPassword($ui) {
     $e = Get-PwUiSelected $ui; if (-not $e) { return }
     $p = Invoke-PwVault $ui { Get-PwPreviousPassword $e.Name }
     if (-not $p) { Set-PwUiStatus $ui "「$($e.Title)」には変更前のパスワードがありません。" -Warn; return }
-    Set-PwUiClipboard $ui $p.Text $true "「$($e.Title)」の変更前のパスワード（$($p.Replaced) まで使用）"
+    Set-PwUiClipboard $ui $p.Secret $true "「$($e.Title)」の変更前のパスワード（$($p.Replaced) まで使用）"
 }
 
 function Copy-PwUiField($ui, $Field) {

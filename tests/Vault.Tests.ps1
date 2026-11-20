@@ -31,7 +31,7 @@ $global:Store.Clear()
 Import-PwCsv -Path $csv 3>$null 6>$null
 $e = @(Get-PwEntry)[0]
 Check '取り込むと元の値に戻る' ($e.Title -eq '=1+1' -and $e.Id -eq '@user')
-Check 'パスワードも元のまま取り込む' ((& $Pwm { param($n) Get-PwPassword $n } $e.Name) -eq '-pw=1')
+Check 'パスワードも元のまま取り込む' ((Plain (& $Pwm { param($n) Get-PwPassword $n } $e.Name)) -eq '-pw=1')
 
 $global:Store.Clear()
 $csv2 = Join-Path $TestRoot 'extra.csv'

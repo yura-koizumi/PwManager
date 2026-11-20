@@ -9,7 +9,7 @@ function global:Write-Csv([string]$Name, [string[]]$Lines) {
 function global:Reset-Store { $global:Store.Clear() }
 function global:Get-One([string]$Title) {
     $e = @(Get-PwEntry -All | Where-Object Title -eq $Title)[0]
-    if ($e) { $e | Add-Member -NotePropertyName Password -NotePropertyValue (& $Pwm { param($n) Get-PwPassword $n } $e.Name) -PassThru }
+    if ($e) { $e | Add-Member -NotePropertyName Password -NotePropertyValue (Plain (& $Pwm { param($n) Get-PwPassword $n } $e.Name)) -PassThru }
 }
 
 Write-Host 'ブラウザーやほかのツールの CSV を取り込む'

@@ -39,7 +39,7 @@ Check 'パイプの先には全項目が渡る'                       ((Get-PwEn
 Write-Host 'ほかのコマンドからの検索は件数で区切らない'
 Add-Entry 200 'ZZZ 最後のサービス' 'last' ''
 $global:Copied = $null
-& $Pwm { function script:Set-PwClipboard($Text, [switch]$Sensitive) { $global:Copied = $Text; 1 } ; function script:Start-PwClipboardClearJob { } }
+& $Pwm { function script:Set-PwClipboard($Text, $Secret, [switch]$Sensitive) { $global:Copied = if ($Secret) { Plain $Secret } else { $Text }; 1 } ; function script:Start-PwClipboardClearJob { } }
 Copy-PwField 'ZZZ 最後のサービス' Id 6>$null
 Check '51 件目以降のエントリも Copy-PwField などで選べる' ($global:Copied -eq 'last')
 

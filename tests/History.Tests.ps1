@@ -11,18 +11,18 @@ Check '右クリックのメニューに出さない（Test-PwPreviousPassword �
 Check 'パスワード以外の更新では残さない'               ($null -eq (& $prev $name))
 [void](& $save $name 'second-pw')
 $p = & $prev $name
-Check 'パスワードを変えたら、変更前のものを残す'       ($p.Text -eq 'first-pw' -and $p.Replaced -match '^\d{4}-\d\d-\d\d')
+Check 'パスワードを変えたら、変更前のものを残す'       ((Plain $p.Secret) -eq 'first-pw' -and $p.Replaced -match '^\d{4}-\d\d-\d\d')
 Check '右クリックのメニューに出す（Test-PwPreviousPassword が真）' (& $Pwm { param($n) Test-PwPreviousPassword $n } $name)
-Check '今のパスワードは新しいもの'                    ((& $Pwm { param($n) Get-PwPassword $n } $name) -eq 'second-pw')
+Check '今のパスワードは新しいもの'                    ((Plain (& $Pwm { param($n) Get-PwPassword $n } $name)) -eq 'second-pw')
 [void](& $save $name 'second-pw')
-Check '同じパスワードを入れ直しても、変更前のものは消えない' ((& $prev $name).Text -eq 'first-pw')
+Check '同じパスワードを入れ直しても、変更前のものは消えない' ((Plain (& $prev $name).Secret) -eq 'first-pw')
 [void](& $save $name 'third-pw')
-Check '残すのは 1 つ前だけ'                            ((& $prev $name).Text -eq 'second-pw' -and @($global:Store.Keys | Where-Object { $_ -like 'pwm-prev:*' }).Count -eq 1)
+Check '残すのは 1 つ前だけ'                            ((Plain (& $prev $name).Secret) -eq 'second-pw' -and @($global:Store.Keys | Where-Object { $_ -like 'pwm-prev:*' }).Count -eq 1)
 Check '一覧には出ない'                                 (@(Get-PwEntry -All).Count -eq 1)
 
 Write-Host 'コピー'
 $global:Copied = $null
-& $Pwm { function script:Set-PwClipboard($Text, [switch]$Sensitive) { $global:Copied = $Text; 1 }; function script:Start-PwClipboardClearJob { } }
+& $Pwm { function script:Set-PwClipboard($Text, $Secret, [switch]$Sensitive) { $global:Copied = if ($Secret) { Plain $Secret } else { $Text }; 1 }; function script:Start-PwClipboardClearJob { } }
 Copy-PwField サービス -Previous 6>$null
 Check 'Copy-PwField -Previous で変更前のパスワードをコピーする' ($global:Copied -eq 'second-pw')
 $other = & $Pwm { Save-PwEntry -Title '別のサービス' -Password (S 'x-pw') }
