@@ -93,6 +93,57 @@ function Invoke-PwUiBackup($ui) {
     Set-PwUiStatus $ui "バックアップしました: $($zip.FullName)"
 }
 
+function Invoke-PwUiImportCsv($ui) {
+    # ブラウザー・ほかのツール・Excel の CSV を取り込む（Import-PwCsv と同じ判別）
+    $od = New-Object System.Windows.Forms.OpenFileDialog -Property @{
+        Title = 'CSV から取り込む'; Filter = 'CSV ファイル (*.csv)|*.csv|すべてのファイル (*.*)|*.*'
+    }
+    try { if ($od.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }; $path = $od.FileName }
+    finally { $od.Dispose() }
+    $rows = Read-PwCsvRows $path
+    if ($rows.Count -eq 0) { Show-PwMessage 'この CSV には取り込める行がありません。' 'Warn'; return }
+    $unknown = Get-PwCsvUnknownColumns $rows $ui.Cfg
+    if ($unknown.Count -gt 0) {
+        $r = [System.Windows.Forms.MessageBox]::Show($ui.Form,
+            ("次の列には、入れる先の項目がありません（値が入っています）:`n  $($unknown -join ', ')`n`n" +
+             "この列を取り込まずに続けますか？`n残したいときは「いいえ」を押し、設定ファイルの Fields に項目を追加してから取り込み直してください。"),
+            'CSV から取り込む', [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning, [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+        if ($r -ne [System.Windows.Forms.DialogResult]::Yes -or $ui.Locking) { return }
+    }
+    $ui.Form.UseWaitCursor = $true
+    try { $res = Import-PwCsvRows $rows $ui.Cfg $path { param($a) Invoke-PwVault $ui $a } }
+    finally { $ui.Form.UseWaitCursor = $false }
+    Update-PwUiData $ui
+    Set-PwUiStatus $ui "$($res.Ok) 件を取り込みました。"
+    Show-PwMessage ("$($res.Ok) 件を取り込みました（タイトルかパスワードが空で飛ばした行: $($res.Skip) 件）。`n`n" +
+                    "取り込んだ CSV にはパスワードがそのまま残っています。削除して、ごみ箱も空にしてください。")
+}
+
+function Invoke-PwUiExportCsv($ui) {
+    # CSV に書き出す。形式は保存の画面の「ファイルの種類」で選ぶ
+    $sd = New-Object System.Windows.Forms.SaveFileDialog -Property @{
+        Title = 'CSV に書き出す'; FileName = "PwManager-$(Get-PwNow 'yyyyMMdd').csv"; DefaultExt = 'csv'
+        Filter = 'ブラウザー・ほかのツール向け (*.csv)|*.csv|Excel 向け・パスワードあり (*.csv)|*.csv|Excel 向け・パスワードなし (*.csv)|*.csv'
+    }
+    try { if ($sd.ShowDialog($ui.Form) -ne [System.Windows.Forms.DialogResult]::OK) { return }; $path = $sd.FileName; $kind = $sd.FilterIndex }
+    finally { $sd.Dispose() }
+    $withPw = $kind -ne 3
+    if ($withPw) {
+        $r = [System.Windows.Forms.MessageBox]::Show($ui.Form,
+            "パスワードを暗号化せずに書き出します。`n誰でも開けるファイルになるので、使い終わったらすぐに削除してください。`n`n書き出しますか？",
+            'CSV に書き出す', [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Warning, [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+        if ($r -ne [System.Windows.Forms.DialogResult]::Yes -or $ui.Locking) { return }
+    }
+    $format = if ($kind -eq 1) { 'Chrome' } else { 'PwManager' }
+    $ui.Form.UseWaitCursor = $true
+    try { Invoke-PwVault $ui { Export-PwCsv -Path $path -Format $format -IncludePassword:$withPw -Confirm:$false 3>$null } }
+    finally { $ui.Form.UseWaitCursor = $false }
+    Set-PwUiStatus $ui "書き出しました: $path"
+    if ($withPw) { Show-PwMessage "書き出しました:`n$path`n`n使い終わったら削除して、ごみ箱も空にしてください。" }
+}
+
 function Invoke-PwUiConfig($ui) {
     $how = Edit-PwConfig
     $msg = switch ($how) {

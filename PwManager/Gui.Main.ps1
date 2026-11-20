@@ -73,7 +73,7 @@ function Show-PwManager {
 
         # ---- 画面の組み立て ----
         $form = New-PwControl Form @{
-            Text = "PwManager - $env:USERNAME"; StartPosition = 'CenterScreen'
+            Text = "PwManager $($script:Version) - $env:USERNAME"; StartPosition = 'CenterScreen'
             Size = (New-PwSize 1240 680); MinimumSize = (New-PwSize 720 400); Font = $ui.Font; KeyPreview = $true
         }
         $ui.Form = $form
@@ -110,6 +110,8 @@ function Show-PwManager {
             $item.Add_Click({ param($s) Invoke-PwUi $ui $s.Tag })
         }
         & $addItem $appMenu 'バックアップ' '' { Invoke-PwUiBackup $ui }
+        & $addItem $appMenu 'CSV から取り込む...' '' { Invoke-PwUiImportCsv $ui }
+        & $addItem $appMenu 'CSV に書き出す...' '' { Invoke-PwUiExportCsv $ui }
         & $addItem $appMenu 'マスターパスワードの変更...' '' { Invoke-PwUiChangePassword $ui }
         & $addItem $appMenu '設定ファイルを開く...' '' { Invoke-PwUiConfig $ui }
         [void]$appMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))

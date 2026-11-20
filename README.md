@@ -156,7 +156,7 @@ ZIP の中の保管庫データは暗号化されたままで、戻すには **�
 Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV は、そのまま取り込めます（列名から自動で判別します）。
 
 1. 元のツールで、パスワードを CSV に書き出します（Chrome なら 設定 →「Google パスワード マネージャー」→ 設定 →「パスワードをエクスポート」）。
-2. PwManager の画面を閉じ、PowerShell で次を実行します。
+2. PwManager の画面の **≡ →「CSV から取り込む...」** で、書き出した CSV を選びます。PowerShell からなら、画面を閉じてから次を実行します。
 
    ```powershell
    Import-PwCsv -Path 'C:\Users\<ユーザー名>\Downloads\Chrome パスワード.csv'
@@ -171,13 +171,11 @@ Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV �
 ### Excel から取り込む
 
 1. Excel の 1 行目（見出し）を `Title`, `Password`, `Id`, `Url`, `Note` にします（`Fields` に追加した項目も使えます）。日本語の見出し（タイトル、パスワード、および `Fields` の `Label`）でも構いません。
-2. 「名前を付けて保存」で **CSV UTF-8** を選んで保存します。
-3. PowerShell で次を実行します。
+2. 「名前を付けて保存」で **CSV UTF-8** か **CSV (コンマ区切り)** を選んで保存します（文字コードは自動で判別します）。
+3. 画面の **≡ →「CSV から取り込む...」** で選ぶか、PowerShell で次を実行します。
 
    ```powershell
    Import-PwCsv -Path 'C:\work\passwords.csv'
-   # Excel の「CSV (コンマ区切り)」で保存した場合
-   Import-PwCsv -Path 'C:\work\passwords.csv' -Encoding Default
    ```
 
 4. **取り込みが済んだら、CSV と元の Excel ファイルを削除し、ごみ箱も空にしてください。**
@@ -187,6 +185,8 @@ Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV �
 同じ CSV を 2 回取り込むと、エントリが重複します。
 
 ### 書き出す
+
+画面では **≡ →「CSV に書き出す...」** を選び、保存の画面の「ファイルの種類」で「ブラウザー・ほかのツール向け」「Excel 向け（パスワードあり）」「Excel 向け（パスワードなし）」から選びます。コマンドでは次のとおりです。
 
 | 書き出し方 | 用途 |
 | --- | --- |

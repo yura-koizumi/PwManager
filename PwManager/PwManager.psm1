@@ -27,6 +27,12 @@ $script:DateFormat    = 'yyyy-MM-dd HH:mm:ss'
 $script:PinnedConfig  = $null   # 画面の表示中だけ設定される（Get-PwConfig 参照）
 $script:GuiMutexName  = 'Local\PwManager-GUI'
 $script:AuditMaxBytes = 1MB     # これを超えたら audit.old.log に切り替える（約 1 万件分）
+# 版（例: 0.5.0-beta）。PwManager.psd1 の ModuleVersion と Prerelease から作る（画面のタイトルに出す）
+#（読み込み中はモジュールの Version がまだ入っていないので、psd1 を直接読む）
+$script:Version = & {
+    $psd = Import-PowerShellDataFile (Join-Path $PSScriptRoot 'PwManager.psd1')
+    $psd.ModuleVersion + $(if ($psd.PrivateData.PSData.Prerelease) { '-' + $psd.PrivateData.PSData.Prerelease })
+}
 
 # 機能ごとのファイルを読み込む
 #   Config      設定・監査ログ                Key         保管庫キー（マスターパスワード・回復キー）

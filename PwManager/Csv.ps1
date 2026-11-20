@@ -46,41 +46,69 @@ function Import-PwCsv {
       タイトルの列が無い CSV（Firefox）は、URL のドメイン名をタイトルにする。タイトルかパスワードが空の行は取り込まない。
       どれにも当てはまらない列（2 段階認証の鍵 login_totp・OTPAuth など）に値が入っていると、データを取りこぼさないよう止まる
       （-IgnoreUnknownColumns でその列を無視して続ける）。列があっても、値が空なら止まらない。
-      Excel の「CSV (コンマ区切り)」は -Encoding Default、それ以外（ブラウザーや「CSV UTF-8」）は既定の UTF8。
+      文字コードは自動で判別する（UTF-8 と、Excel の「CSV (コンマ区切り)」の Shift-JIS）。
       PwManager の画面を閉じてから実行する。取り込んだら、CSV と元のファイルは削除し、ごみ箱も空にすること。
     .PARAMETER Path
       CSV ファイル。
     .PARAMETER Encoding
-      文字コード（UTF8 または Default）。
+      文字コード。既定の Auto で自動判別。うまく読めないときだけ UTF8 か Default（Shift-JIS）を指定する。
     .PARAMETER IgnoreUnknownColumns
       取り込み先の項目が無い列を無視して続ける。
     .EXAMPLE
       Import-PwCsv -Path 'C:\work\Chrome パスワード.csv'
     .EXAMPLE
-      Import-PwCsv -Path 'C:\work\passwords.csv' -Encoding Default -IgnoreUnknownColumns
+      Import-PwCsv -Path 'C:\work\passwords.csv' -IgnoreUnknownColumns
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)][string]$Path,
-        [ValidateSet('UTF8', 'Default')][string]$Encoding = 'UTF8',
+        [ValidateSet('Auto', 'UTF8', 'Default')][string]$Encoding = 'Auto',
         [switch]$IgnoreUnknownColumns
     )
     Assert-PwGuiClosed
     $cfg = Get-PwConfig
-    $rows = @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
-    $known = @($script:CsvTitleColumns) + @($script:CsvPasswordColumns) + @($script:CsvIgnoredColumns) +
-             @(foreach ($f in @($cfg.Fields)) { Get-PwCsvFieldColumns $f })
-    # 入れる先の無い列でも、値が 1 つも入っていなければ失うものは無いので止めない
-    # （Bitwarden・1Password は、使っていなくても login_totp・fields・OTPAuth・Tags の列を必ず書き出す）
-    $unknown = @(if ($rows.Count -gt 0) {
-        $rows[0].PSObject.Properties.Name | Where-Object { $known -notcontains $_ } |
-            Where-Object { $col = $_; @($rows | Where-Object { $_.$col }).Count -gt 0 }
-    })
+    $rows = Read-PwCsvRows $Path $Encoding
+    $unknown = Get-PwCsvUnknownColumns $rows $cfg
     if ($unknown.Count -gt 0 -and -not $IgnoreUnknownColumns) {
         throw ("取り込み先の項目が無い列があります: {0}`n" +
                "設定の Fields に項目を追加してから取り込むか（README「項目（Fields）を追加・変更する」）、" +
                "その列を取り込まなくてよければ -IgnoreUnknownColumns を付けて実行してください。") -f ($unknown -join ', ')
     }
+    $r = Import-PwCsvRows $rows $cfg $Path
+    Write-Host "$($r.Ok) 件を取り込みました。（タイトルかパスワードが空でスキップ: $($r.Skip) 件）" -ForegroundColor Green
+    Write-Warning '取り込みが済んだら、元の CSV ファイルは削除し、ごみ箱も空にしてください（パスワードが平文で残っています）。'
+}
+
+function Read-PwCsvRows([string]$Path, [string]$Encoding = 'Auto') {
+    # CSV を読む。Auto は、BOM があるか UTF-8 として正しく読めれば UTF-8、そうでなければ Excel の「CSV (コンマ区切り)」（Shift-JIS）
+    if ($Encoding -eq 'Auto') {
+        $bytes = [IO.File]::ReadAllBytes($Path)
+        $Encoding = 'UTF8'
+        if (-not ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF)) {
+            try { [void](New-Object Text.UTF8Encoding($false, $true)).GetString($bytes) } catch { $Encoding = 'Default' }
+        }
+        [Array]::Clear($bytes, 0, $bytes.Length)
+    }
+    , @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
+}
+
+function Get-PwCsvUnknownColumns($Rows, $Cfg) {
+    # 入れる先の無い列のうち、値が入っているもの。
+    # 値が 1 つも入っていなければ失うものは無いので数えない
+    # （Bitwarden・1Password は、使っていなくても login_totp・fields・OTPAuth・Tags の列を必ず書き出す）
+    $known = @($script:CsvTitleColumns) + @($script:CsvPasswordColumns) + @($script:CsvIgnoredColumns) +
+             @(foreach ($f in @($Cfg.Fields)) { Get-PwCsvFieldColumns $f })
+    , @(if (@($Rows).Count -gt 0) {
+        $Rows[0].PSObject.Properties.Name | Where-Object { $known -notcontains $_ } |
+            Where-Object { $col = $_; @($Rows | Where-Object { $_.$col }).Count -gt 0 }
+    })
+}
+
+function Import-PwCsvRows($Rows, $Cfg, [string]$Path, [scriptblock]$Wrap = { param($a) & $a }) {
+    # 読んだ行を登録する（入れる先の無い列は無視する）。@{ Ok = 取り込んだ件数; Skip = 飛ばした件数 } を返す。
+    # -Wrap: 1 件ずつの保存を包む（画面では、途中で保管庫のロックが切れても、その 1 件だけをやり直すように）
+    $cfg = $Cfg
+    $rows = @($Rows)
     $pick = {
         param($Row, [string[]]$Keys)
         foreach ($k in $Keys) { $p = $Row.PSObject.Properties[$k]; if ($p -and $p.Value) { return [string]$p.Value } }
@@ -101,12 +129,12 @@ function Import-PwCsv {
         if (-not $title -or -not $pw) { $skip++; continue }
         $fields = @{}
         foreach ($f in @($cfg.Fields)) { $fields[$f.Name] = Unprotect-PwCsvValue (& $pick $r (Get-PwCsvFieldColumns $f)) }
-        Save-PwEntry -Title $title -Fields $fields -Password (ConvertTo-SecureString $pw -AsPlainText -Force) | Out-Null
+        $sec = ConvertTo-SecureString $pw -AsPlainText -Force
+        & $Wrap { Save-PwEntry -Title $title -Fields $fields -Password $sec | Out-Null }
         $ok++
     }
     Write-PwAudit 'IMPORT' "$Path ($ok 件)"
-    Write-Host "$ok 件を取り込みました。（タイトルかパスワードが空でスキップ: $skip 件）" -ForegroundColor Green
-    Write-Warning '取り込みが済んだら、元の CSV ファイルは削除し、ごみ箱も空にしてください（パスワードが平文で残っています）。'
+    @{ Ok = $ok; Skip = $skip }
 }
 
 function Export-PwCsv {

@@ -50,6 +50,23 @@ $bwFull = Write-Csv 'bw-full.csv' @('folder,favorite,type,name,notes,fields,repr
 Import-PwCsv -Path $bwFull 6>$null 3>$null
 Check '入れる先の無い列（fields・login_totp）でも、値が空なら止めない（Bitwarden の実際の書き出し）' ((Get-One 'Amazon').Id -eq 'taro')
 
+Write-Host '文字コードの自動判別'
+Reset-Store
+$sjis = Join-Path $dir 'excel-sjis.csv'
+[IO.File]::WriteAllLines($sjis, [string[]]@('タイトル,パスワード,ID', '社内ポータル,pw-1,taro'), [Text.Encoding]::GetEncoding(932))
+Import-PwCsv -Path $sjis 6>$null 3>$null
+Check 'Excel の「CSV (コンマ区切り)」（Shift-JIS）も、指定せずに読める' ((Get-One '社内ポータル').Id -eq 'taro')
+Reset-Store
+$utf8 = Write-Csv 'utf8-nobom.csv' @('タイトル,パスワード,ID', '社内ポータル,pw-1,taro')
+Import-PwCsv -Path $utf8 6>$null 3>$null
+Check 'BOM の無い UTF-8 も読める' ((Get-One '社内ポータル').Id -eq 'taro')
+
+Write-Host '画面からの取り込み（1 件ずつ包む）'
+Reset-Store
+$global:Wrapped = 0
+$res = & $Pwm { param($p) $rows = Read-PwCsvRows $p; Import-PwCsvRows $rows (Get-PwConfig) $p { param($a) $global:Wrapped++; & $a } } (Write-Csv 'two.csv' @('Title,Password', 'A,pw-a', 'B,pw-b', ',pw-c'))
+Check '1 件ずつ包んで保存し、件数を返す' ($global:Wrapped -eq 2 -and $res.Ok -eq 2 -and $res.Skip -eq 1 -and @(Get-PwEntry -All).Count -eq 2)
+
 Write-Host '既定の形の書き出し'
 Reset-Store
 [void](& $Pwm { Save-PwEntry -Title "'=odd" -Fields @{ Id = "'-x"; Note = '=SUM(A1)' } -Password (S 'pw') })
