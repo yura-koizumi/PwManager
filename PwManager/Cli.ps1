@@ -11,7 +11,9 @@ function Resolve-PwEntry([string]$Query) {
     if (-not $Query.Trim()) { throw '検索語を入力してください。' }
     $cfg = Get-PwConfig
     $all = @(Get-PwEntry -All)
-    $exact = @($all | Where-Object { $_.Title -eq $Query })
+    # 大文字小文字まで一致するものを先に見る（「ABC」と「abc」が両方あるとき、選ぶ画面を出さずに決められるように）
+    $exact = @($all | Where-Object { $_.Title -ceq $Query })
+    if ($exact.Count -eq 0) { $exact = @($all | Where-Object { $_.Title -eq $Query }) }
     $hits = @(if ($exact.Count -ge 1) { $exact } else {
         $terms = @(ConvertTo-PwQuery $Query $cfg)
         $all | Where-Object { Test-PwMatch $_ $terms $cfg }

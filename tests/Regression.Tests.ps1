@@ -62,7 +62,7 @@ Remove-Item -LiteralPath $cfgPath
 
 Write-Host '保管庫の登録（SecretStore の場所）'
 $global:Reg = New-Object System.Collections.Generic.List[string]
-function global:Get-Module { param([switch]$ListAvailable, $Name) [pscustomobject]@{ Name = $Name; ModuleBase = 'C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6' } }
+function global:Get-Module { param([switch]$ListAvailable, $Name) [pscustomobject]@{ Name = $Name; Version = [version]'1.0.6'; ModuleBase = 'C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6'; Path = 'C:\Local\Programs\PwManager\Modules\Microsoft.PowerShell.SecretStore\1.0.6\Microsoft.PowerShell.SecretStore.psd1' } }
 function global:Get-SecretVault { param($Name) [pscustomobject]@{ Name = 'PwVault'; IsDefault = $true; ModulePath = $global:VaultModulePath } }
 function global:Unregister-SecretVault { param($Name) $global:Reg.Add("unregister:$Name") }
 function global:Register-SecretVault { param($Name, $ModuleName, [switch]$DefaultVault) $global:Reg.Add("register:$Name default=$DefaultVault") }

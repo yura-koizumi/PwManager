@@ -134,16 +134,35 @@ if (-not (Test-Path -LiteralPath $storeDir) -and -not (Test-Path -LiteralPath $d
 
 # --- 最後に、一緒に入れた SecretManagement / SecretStore と、モジュールを探す場所の設定を消す ----------
 # （データを消すときに SecretManagement を使うので、最後にする）
+# データを残したときも、保管庫の登録は外す（これから消す SecretStore を指したままだと、ほかで SecretManagement を
+# 使ったときにエラーになるため）。登録を外してもデータはそのままで、Install.bat を実行すれば登録し直す
+try {
+    if ((Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretManagement) -and (Get-SecretVault -Name $vaultName -ErrorAction SilentlyContinue)) {
+        Unregister-SecretVault -Name $vaultName
+    }
+} catch { Write-Warning "保管庫の登録を外せませんでした（$($_.Exception.Message)）。" }
 Remove-Module PwManager, Microsoft.PowerShell.SecretStore, Microsoft.PowerShell.SecretManagement -Force -ErrorAction SilentlyContinue
 if (Test-Path -LiteralPath $root) {
-    try { Remove-Item -LiteralPath $root -Recurse -Force; Write-Host "一緒に入れた SecretManagement / SecretStore を削除しました: $root" }
-    catch { Write-Warning "一部のファイルを削除できませんでした（PowerShell をすべて閉じてから、このフォルダーを削除してください）: $root" }
+    try {
+        Remove-Item -LiteralPath $root -Recurse -Force
+        Write-Host "一緒に入れた SecretManagement / SecretStore を削除しました: $root"
+    } catch {
+        # 読み込んだ DLL はこのプロセスが終わるまで消せない。終わるのを待って消す PowerShell を、画面を出さずに起動する
+        $cmd = "Wait-Process -Id $PID -ErrorAction SilentlyContinue; Remove-Item -LiteralPath '$($root -replace "'", "''")' -Recurse -Force -ErrorAction SilentlyContinue"
+        $enc = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($cmd))
+        Start-Process powershell.exe -WindowStyle Hidden -ArgumentList '-NoProfile', '-NonInteractive', '-EncodedCommand', $enc
+        Write-Host "一緒に入れた SecretManagement / SecretStore は、このウィンドウの処理が終わったあとに削除します: $root"
+    }
 }
-$userPaths = @([Environment]::GetEnvironmentVariable('PSModulePath', 'User') -split ';' | Where-Object { $_ -and $_ -ne $modules })
+# モジュールを探す場所から、Install.ps1 が足したものを外す（末尾の \ の有無は区別しない）
+$norm = { param($p) ([string]$p).TrimEnd('\') }
+$before = [Environment]::GetEnvironmentVariable('PSModulePath', 'User')
+$userPaths = @($before -split ';' | Where-Object { $_ -and (& $norm $_) -ne (& $norm $modules) })
 $documents = Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'WindowsPowerShell\Modules'
 # Install.ps1 が足した Documents の場所だけが残るなら、設定ごと消す（PowerShell の既定に戻る）
-if ($userPaths.Count -eq 0 -or ($userPaths.Count -eq 1 -and $userPaths[0] -eq $documents)) { $userPaths = $null }
-[Environment]::SetEnvironmentVariable('PSModulePath', $(if ($userPaths) { $userPaths -join ';' } else { $null }), 'User')
+if ($userPaths.Count -eq 0 -or ($userPaths.Count -eq 1 -and (& $norm $userPaths[0]) -eq (& $norm $documents))) { $userPaths = @() }
+$after = if ($userPaths.Count) { $userPaths -join ';' } else { $null }
+if ($after -ne $before) { [Environment]::SetEnvironmentVariable('PSModulePath', $after, 'User') }
 
 Write-Host ''
 Write-Host 'アンインストールが完了しました。' -ForegroundColor Green

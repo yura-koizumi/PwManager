@@ -35,6 +35,8 @@ function Copy-PwUiField($ui, $Field) {
     $e = Get-PwUiSelected $ui; if (-not $e) { return }
     $v = [string]$e.($Field.Name)
     if (-not $v) { Set-PwUiStatus $ui "「$($e.Title)」の$($Field.Label)は空です。" -Warn; return }
+    # 秘密にする項目（Sensitive）は、パスワードと同じく SecureString で渡す（引数の値がログに残らないように）
+    if ($Field.Sensitive) { $v = [Net.NetworkCredential]::new('', $v).SecurePassword }
     Set-PwUiClipboard $ui $v ([bool]$Field.Sensitive) "「$($e.Title)」の$($Field.Label)"
 }
 
@@ -123,7 +125,8 @@ function Invoke-PwUiImportCsv($ui) {
     finally {
         $ui.Form.UseWaitCursor = $false
         $ui.LastActivity = Get-Date   # 取り込みに時間がかかっても、終わった直後に自動ロックしないように
-        if (-not $ui.Locking) { Update-PwUiData $ui }   # 途中で止まっても、取り込めた分を一覧に出す
+        # 途中で止まっても、取り込めた分を一覧に出す。一覧の読み直しに失敗しても、取り込みのエラー（件数を含む）を上書きしない
+        if (-not $ui.Locking) { try { Update-PwUiData $ui } catch { } }
     }
     Set-PwUiStatus $ui "$($res.Ok) 件を取り込みました。"
     Show-PwMessage ("$($res.Ok) 件を取り込みました（タイトルかパスワードが空で飛ばした行: $($res.Skip) 件）。`n`n" +

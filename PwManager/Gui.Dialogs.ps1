@@ -115,7 +115,7 @@ function Show-PwUnlockDialog($ui, [string]$Message = 'マスターパスワー�
     }
     $dlg.Dispose()
     if ($state.Ok -and $state.Prior -gt 0) {
-        $when = if ($state.Last) { $state.Last.ToString('yyyy/MM/dd HH:mm') } else { '不明' }
+        $when = if ($state.Last) { $state.Last.ToString('yyyy/MM/dd HH:mm', [Globalization.CultureInfo]::InvariantCulture) } else { '不明' }
         $text = ("前回正しく開いてから、マスターパスワードの入力に {0} 回失敗しています（最後: {1}）。`n" +
                  "心当たりがなければ、≡ →「マスターパスワードの変更」で変更することを検討してください。") -f $state.Prior, $when
         Show-PwMessage $text 'Warn'
@@ -268,7 +268,17 @@ function Show-PwEditDialog($ui, $Entry, [switch]$Copy) {
     $gen.Add_Click({
         Invoke-PwUi $ui {
             $ui.GenOptions = @{ Length = [int]$genLen.Value; Kind = $genKind.SelectedIndex }
-            $pw.Text = New-PwPassword -Length $ui.GenOptions.Length -NoSymbols:($genKind.SelectedIndex -eq 1) -DigitsOnly:($genKind.SelectedIndex -eq 2)
+            $opt = @{ Length = $ui.GenOptions.Length }
+            switch ($genKind.SelectedIndex) {
+                0 {
+                    # 「英数字と記号」を選んだら、設定で記号を使わない（Symbols: false）ことにしていても記号を入れる
+                    $chars = [string]$cfg.PasswordGenerator.SymbolChars
+                    $opt.SymbolChars = if ($chars) { $chars } else { '!#$%&*+-=?@_' }
+                }
+                1 { $opt.NoSymbols = $true }
+                2 { $opt.DigitsOnly = $true }
+            }
+            $pw.Text = New-PwPassword @opt
             $show.Checked = $true
         }
     })

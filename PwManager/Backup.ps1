@@ -4,6 +4,8 @@
 # この PC 用の包み（Windows ユーザーに結び付いたもの）は入れない。開くには回復キーが必要。
 
 function Save-PwArchive([string]$Zip) {
+    # 同じ名前のファイルが既にあれば、上書きも削除もしない（同じ秒に 2 回取ったとき、先のバックアップを消さないように）
+    if (Test-Path -LiteralPath $Zip) { throw "同じ名前のファイルがあります。少し待ってから、もう一度実行してください: $Zip" }
     $tmp = Join-Path $env:TEMP ('pwm-archive-' + [guid]::NewGuid().ToString('N'))
     try {
         $paths = @($script:StoreRoot)

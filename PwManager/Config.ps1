@@ -41,6 +41,21 @@ function Get-PwConfig {
         }
     }
 
+    # 値の種類を確かめる（"30" や "false" のように引用符で囲むと、文字列として読まれ、意図と逆に動くことがあるため）
+    $g = $cfg.PasswordGenerator
+    foreach ($n in @(
+            @{ Name = 'ClipboardClearSeconds'; Value = $cfg.ClipboardClearSeconds },
+            @{ Name = 'AutoLockMinutes'; Value = $cfg.AutoLockMinutes },
+            @{ Name = 'UnlockTimeoutSeconds'; Value = $cfg.UnlockTimeoutSeconds },
+            @{ Name = 'PasswordGenerator.Length'; Value = $g.Length })) {
+        $v = $n.Value
+        if ($v -isnot [int] -and $v -isnot [long] -and $v -isnot [double] -and $v -isnot [decimal] -or $v -lt 0) {
+            throw "設定 $($n.Name) は 0 以上の数にしてください（引用符で囲まずに書きます）。今の値: $v"
+        }
+    }
+    foreach ($n in @(@{ Name = 'ExcludeFromClipboardHistory'; Value = $cfg.ExcludeFromClipboardHistory }, @{ Name = 'PasswordGenerator.Symbols'; Value = $g.Symbols })) {
+        if ($n.Value -isnot [bool]) { throw "設定 $($n.Name) は true か false にしてください（引用符で囲まずに書きます）。今の値: $($n.Value)" }
+    }
     # 画面は有効期限の 60 秒前に再入力を求めるので、それより短いと開くたびに求め続けてしまう
     if ([int]$cfg.UnlockTimeoutSeconds -lt 120) { throw '設定 UnlockTimeoutSeconds は 120 以上にしてください。' }
 

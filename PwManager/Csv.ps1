@@ -33,7 +33,8 @@ $script:CsvIgnoredColumns  = 'Updated', 'Created', '更新日時', '作成日時
 
 function Get-PwCsvFieldColumns($Field) {
     # その項目に入れる列名（Name・Label と、ほかのツールでの呼び名）
-    @($Field.Name, $Field.Label) + @($script:CsvFieldAliases[$Field.Name])
+    # 別名の無い項目（自分で足した項目）では $null が混ざるので除く（混ざると列の検索で失敗する）
+    @(@($Field.Name, $Field.Label) + @($script:CsvFieldAliases[$Field.Name]) | Where-Object { $_ })
 }
 
 function Import-PwCsv {

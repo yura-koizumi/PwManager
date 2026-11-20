@@ -133,7 +133,9 @@ function Copy-PwField {
         if (-not $text) { Write-Warning "「$($entry.Title)」の $label は空です。"; return }
     }
 
-    $seq = if ($secret) { Set-PwClipboard -Secret $secret } else { Set-PwClipboard -Text $text -Sensitive:$sensitive }
+    # 秘密にする項目（Sensitive）も、パスワードと同じく SecureString で渡す（引数の値がログに残らないように）
+    if (-not $secret -and $sensitive) { $secret = [Net.NetworkCredential]::new('', $text).SecurePassword; $text = $null }
+    $seq = if ($secret) { Set-PwClipboard -Secret $secret } else { Set-PwClipboard -Text $text }
     $sec = [int]$cfg.ClipboardClearSeconds
     if ($sensitive -and $sec -gt 0) {
         Start-PwClipboardClearJob $seq $sec

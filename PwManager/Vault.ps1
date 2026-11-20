@@ -11,19 +11,18 @@ function Test-PwLockedError($ErrorRecord) {
     $false
 }
 
-function ConvertFrom-PwSecureString([securestring]$Secure) {
-    $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($Secure)
-    try { [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) }
-    finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
-}
-
 function Register-PwVaultIfMissing($Cfg) {
     # 保管庫を SecretManagement に登録する。SecretManagement は登録したときの SecretStore の場所を覚えていて、そこから読み込む。
     # 今使う SecretStore（PwManager と同じ場所に入れたもの）と違う場所で登録されていれば、登録し直す
     # （Documents の下は OneDrive で同期されることがあり、そこにあるプログラムを書き換えられると、パスワードを盗まれうるため）。
     # 登録し直しても、保管庫のデータ（localstore）はそのまま。
     $vault = Get-SecretVault -Name $Cfg.VaultName -ErrorAction SilentlyContinue
-    $store = @(Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretStore)[0]
+    # PwManager と同じ場所（Modules フォルダー）にある SecretStore を使う。無ければ（開発中など）PowerShell が見つけるもの。
+    # PSModulePath の順番に左右されないよう、登録するときも psd1 の場所で指定する
+    $mine = Split-Path -Parent $script:ModuleRoot
+    $stores = @(Get-Module -ListAvailable -Name Microsoft.PowerShell.SecretStore)
+    $store = @($stores | Where-Object { $_.ModuleBase.StartsWith($mine + '\', [StringComparison]::OrdinalIgnoreCase) } |
+               Sort-Object Version -Descending) + $stores | Select-Object -First 1
     $wasDefault = $null
     if ($vault -and $store -and $vault.ModulePath -and -not ([string]$vault.ModulePath).StartsWith($store.ModuleBase, [StringComparison]::OrdinalIgnoreCase)) {
         $wasDefault = $vault.IsDefault
@@ -32,7 +31,8 @@ function Register-PwVaultIfMissing($Cfg) {
     }
     if (-not $vault) {
         $default = if ($null -ne $wasDefault) { $wasDefault } else { @(Get-SecretVault -ErrorAction SilentlyContinue | Where-Object { $_.IsDefault }).Count -eq 0 }
-        Register-SecretVault -Name $Cfg.VaultName -ModuleName Microsoft.PowerShell.SecretStore -DefaultVault:$default
+        $module = if ($store) { $store.Path } else { 'Microsoft.PowerShell.SecretStore' }
+        Register-SecretVault -Name $Cfg.VaultName -ModuleName $module -DefaultVault:$default
         Write-Host "保管庫 '$($Cfg.VaultName)' を登録しました。"
     }
 }
@@ -55,7 +55,7 @@ function Use-PwVault([scriptblock]$Action) {
             catch { if ($i -ge 3) { throw }; Write-Warning $_.Exception.Message }
         }
         if ($before.Count -gt 0) {
-            Write-Warning ("前回正しく開いてから、マスターパスワードの入力に {0} 回失敗しています（最後: {1}）。" -f $before.Count, $before.Last)
+            Write-Warning ("前回正しく開いてから、マスターパスワードの入力に {0} 回失敗しています（最後: {1}）。" -f $before.Count, $before.Last.ToString('yyyy/MM/dd HH:mm', [Globalization.CultureInfo]::InvariantCulture))
         }
         & $Action
     }
