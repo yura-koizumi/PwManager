@@ -344,3 +344,7 @@ SecretManagement / SecretStore は、`Install.ps1` でメジャーバージョ�
 - シークレットの本体はパスワード（SecureString）です。
 - メタデータには、`Title`、`Created`、`Updated`、`Schema`、そして `Fields` で定義した各項目が入ります。
 - 名前が `pwm:` で始まらないシークレットは、このツールでは表示しません。ほかの用途のシークレットと同じ保管庫に共存できます。
+
+## ライセンス
+
+[MIT License](LICENSE)

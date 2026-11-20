@@ -32,7 +32,7 @@ if (-not $SkipTests) {
 }
 
 # 配布に含めるもの（ここに無いファイルは含めない。新しいファイルを足したときは、ここにも追加する）
-$rootFiles   = 'Install.bat', 'Install.ps1', 'Uninstall.bat', 'Uninstall.ps1', 'README.md'
+$rootFiles   = 'Install.bat', 'Install.ps1', 'Uninstall.bat', 'Uninstall.ps1', 'README.md', 'LICENSE'
 $moduleFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'PwManager') -File |
     Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' -or $_.Name -eq 'config.default.json' })
 
@@ -50,7 +50,7 @@ if ($IncludeTests) {
 }
 
 # 想定外のファイル（設定・ログ・CSV など個人データになり得るもの）が紛れ込んでいないか確かめる
-$allowed = '\.(ps1|psm1|psd1|bat|md)$|^config\.default\.json$'
+$allowed = '\.(ps1|psm1|psd1|bat|md)$|^config\.default\.json$|^LICENSE$'
 $unexpected = @(Get-ChildItem -LiteralPath $out -Recurse -File | Where-Object { $_.Name -notmatch $allowed })
 if ($unexpected) { throw "想定外のファイルが含まれています: $($unexpected.FullName -join ', ')" }
 
