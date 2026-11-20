@@ -13,17 +13,33 @@
                                            デスクトップの PwManager に読み取り専用で割り当てた Windows Sandbox が開く
 
   作る前に自動テストを実行し、失敗したら作らない（-SkipTests で省略）。
+
+  版の付け方（CHANGELOG.md の先頭にも書いてある）:
+    0.5.<番号>-beta。リリースのたびに最後の番号だけを 1 つ上げる（小さな修正だけでも上げる）。
+    -Bump を付けると、テストが通ったあとに番号を 1 つ上げ（PwManager.psd1）、
+    CHANGELOG.md の「次の版」に書いた変更を、その版の見出しに移す（「次の版」が空なら止まる）。
+    powershell -NoProfile -ExecutionPolicy Bypass -File .\tools\Build-Release.ps1 -Bump
 #>
 [CmdletBinding()]
 param(
     [switch]$IncludeTests,
-    [switch]$SkipTests
+    [switch]$SkipTests,
+    [switch]$Bump
 )
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$psd = Import-PowerShellDataFile (Join-Path $root 'PwManager\PwManager.psd1')
-$ver = $psd.ModuleVersion + $(if ($psd.PrivateData.PSData.Prerelease) { '-' + $psd.PrivateData.PSData.Prerelease })
-Write-Host "=== PwManager v$ver のリリースを作ります ===" -ForegroundColor Cyan
+$psdPath = Join-Path $root 'PwManager\PwManager.psd1'
+$changelogPath = Join-Path $root 'CHANGELOG.md'
+$nextHeading = '## 次の版'
+
+if ($Bump) {
+    # テストの前に「次の版」が書いてあるかだけ確かめる（書き忘れに、テストを待たずに気づけるように）
+    $changelog = [IO.File]::ReadAllText($changelogPath)
+    $m = [regex]::Match($changelog, "(?ms)^$nextHeading\r?\n(.*?)(?=^## |\z)")
+    if (-not $m.Success -or $m.Groups[1].Value -notmatch '(?m)^- ') {
+        throw "CHANGELOG.md の「$nextHeading」に変更を書いてから、もう一度実行してください。"
+    }
+}
 
 if (-not $SkipTests) {
     Write-Host '自動テストを実行します...'
@@ -31,8 +47,28 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'テストが失敗したため、リリースを作りませんでした。' }
 }
 
+if ($Bump) {
+    # 最後の番号を 1 つ上げる（psd1 は BOM 付きのまま書き戻す）
+    $psdText = [IO.File]::ReadAllText($psdPath)
+    $vm = [regex]::Match($psdText, "ModuleVersion\s*=\s*'(\d+)\.(\d+)\.(\d+)'")
+    if (-not $vm.Success) { throw 'PwManager.psd1 の ModuleVersion が読めません。' }
+    $newVersion = '{0}.{1}.{2}' -f $vm.Groups[1].Value, $vm.Groups[2].Value, ([int]$vm.Groups[3].Value + 1)
+    $psdText = $psdText.Remove($vm.Index, $vm.Length).Insert($vm.Index, "ModuleVersion     = '$newVersion'")
+    [IO.File]::WriteAllText($psdPath, $psdText, (New-Object Text.UTF8Encoding $true))
+    $pre = (Import-PowerShellDataFile $psdPath).PrivateData.PSData.Prerelease
+    $label = $newVersion + $(if ($pre) { "-$pre" })
+    # 「次の版」の変更を、その版の見出しの下に移し、「次の版」は空にする
+    $changelog = $changelog -replace "(?m)^$nextHeading\r?\n", "$nextHeading`n`n## $label（$((Get-Date).ToString('yyyy-MM-dd'))）`n"
+    [IO.File]::WriteAllText($changelogPath, $changelog, (New-Object Text.UTF8Encoding $false))
+    Write-Host "版を $label に上げました（PwManager.psd1・CHANGELOG.md）。コミットしてからタグ v$label を付けてください。" -ForegroundColor Green
+}
+
+$psd = Import-PowerShellDataFile $psdPath
+$ver = $psd.ModuleVersion + $(if ($psd.PrivateData.PSData.Prerelease) { '-' + $psd.PrivateData.PSData.Prerelease })
+Write-Host "=== PwManager v$ver のリリースを作ります ===" -ForegroundColor Cyan
+
 # 配布に含めるもの（ここに無いファイルは含めない。新しいファイルを足したときは、ここにも追加する）
-$rootFiles   = 'Install.bat', 'Install.ps1', 'Uninstall.bat', 'Uninstall.ps1', 'README.md', 'LICENSE'
+$rootFiles   = 'Install.bat', 'Install.ps1', 'Uninstall.bat', 'Uninstall.ps1', 'README.md', 'CHANGELOG.md', 'LICENSE'
 $moduleFiles = @(Get-ChildItem -LiteralPath (Join-Path $root 'PwManager') -File |
     Where-Object { $_.Extension -in '.ps1', '.psm1', '.psd1' -or $_.Name -eq 'config.default.json' })
 
