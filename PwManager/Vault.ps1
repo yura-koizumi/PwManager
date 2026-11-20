@@ -97,7 +97,7 @@ function Invoke-PwUnlock([securestring]$Password) {
         if ($_.Exception -is [Security.Authentication.InvalidCredentialException]) {   # パスワード違いだけを数える
             $n = $before.Count + 1
             Initialize-PwDataDir
-            @{ Count = $n; Last = (Get-Date -Format $script:DateFormat) } | ConvertTo-Json | Set-Content -LiteralPath $script:UnlockFailPath -Encoding UTF8
+            @{ Count = $n; Last = (Get-PwNow $script:DateFormat) } | ConvertTo-Json | Set-Content -LiteralPath $script:UnlockFailPath -Encoding UTF8
             Write-PwAudit 'UNLOCK-FAIL' "連続 $n 回目"
         }
         throw
@@ -271,7 +271,7 @@ function Save-PwEntry {
         [securestring]$Password
     )
     $cfg = Get-PwConfig
-    $now = Get-Date -Format $script:DateFormat
+    $now = Get-PwNow $script:DateFormat
     $isNew = -not $Name
     $meta = @{}
 
@@ -343,9 +343,9 @@ function Remove-PwEntry {
         $m = $info[0].Metadata
         $title = if ($m -and $m.ContainsKey('Title')) { [string]$m['Title'] } else { $Name }
         if ($PSCmdlet.ShouldProcess($title, '削除')) {
-            Remove-Secret -Vault $cfg.VaultName -Name $Name
+            Use-PwVault { Remove-Secret -Vault $cfg.VaultName -Name $Name }
             $prev = Get-PwPreviousName $Name
-            if (@(Get-PwSecretInfo $prev).Count) { Remove-Secret -Vault $cfg.VaultName -Name $prev }   # 変更前のパスワードも消す
+            if (@(Get-PwSecretInfo $prev).Count) { Use-PwVault { Remove-Secret -Vault $cfg.VaultName -Name $prev } }   # 変更前のパスワードも消す
             Write-PwAudit 'DELETE' "[$Name]"
         }
     }

@@ -70,6 +70,10 @@ $keyDir = Join-Path $TestRoot 'Desktop'; New-Item -ItemType Directory -Path $key
 $file = & $Pwm { param($t) Show-PwRecoveryKey $t } $text 6>$null
 Check 'デスクトップ（の代わりのフォルダー）にテキストファイルを出す' ((Split-Path $file) -eq $keyDir -and (Get-Content -LiteralPath $file -Raw -Encoding UTF8) -match [regex]::Escape($text))
 Check 'PC から削除するよう書いておく' ((Get-Content -LiteralPath $file -Raw -Encoding UTF8) -match 'PC から削除')
+& $Pwm { param($d) $script:RecoveryKeyDir = $d } (Join-Path $TestRoot 'no-such-folder')
+$shown = & $Pwm { param($t) Show-PwRecoveryKey $t } $text 6>&1 3>&1 | Out-String
+Check 'ファイルに書けなくても止めずに、回復キーを画面に表示して知らせる' ($shown -match [regex]::Escape($text) -and $shown -match '保存できませんでした')
+& $Pwm { param($d) $script:RecoveryKeyDir = $d } $keyDir
 
 Write-Host '保管庫キーと回復キーの作り直し（New-PwRecoveryKey）'
 $file = New-PwRecoveryKey -MasterPassword (S 'master-password-1') -Confirm:$false 6>$null

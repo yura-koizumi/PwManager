@@ -35,7 +35,7 @@ function Backup-PwVault {
     [void](Read-PwKeyFile)   # キーのファイルが無ければ、回復キーで開けないバックアップになるので止める
 
     New-Item -ItemType Directory -Path $Destination -Force | Out-Null
-    $zip = Join-Path $Destination ('PwManager-backup-{0}-{1}.zip' -f $env:COMPUTERNAME, (Get-Date -Format 'yyyyMMdd-HHmmss'))
+    $zip = Join-Path $Destination ('PwManager-backup-{0}-{1}.zip' -f $env:COMPUTERNAME, (Get-PwNow 'yyyyMMdd-HHmmss'))
     Save-PwArchive $zip
     Write-PwAudit 'BACKUP' $zip
     Get-Item -LiteralPath $zip
@@ -45,7 +45,7 @@ function Save-PwVaultSafetyCopy([string]$Kind) {
     # 保管庫を大きく変える前に、%APPDATA%\PwManager\<Kind>-<日時>.zip に退避する（バックアップと同じ形式。保管庫が無ければ何もしない）
     if (-not (Test-Path -LiteralPath (Join-Path $script:StoreRoot 'localstore'))) { return $null }
     Initialize-PwDataDir
-    $zip = Join-Path $script:DataDir ('{0}-{1}.zip' -f $Kind, (Get-Date -Format 'yyyyMMdd-HHmmss-fff'))
+    $zip = Join-Path $script:DataDir ('{0}-{1}.zip' -f $Kind, (Get-PwNow 'yyyyMMdd-HHmmss-fff'))
     Save-PwArchive $zip
     $zip
 }
@@ -109,15 +109,22 @@ function Restore-PwVault {
         }
 
         $dst = Join-Path $script:StoreRoot 'localstore'
+        $old = "$dst.old"   # 置き換えに失敗したら、これを戻す
         $safety = Save-PwVaultSafetyCopy 'pre-restore'
-        if ($safety) {
-            Write-Host "現在の保管庫を退避しました: $safety"
-            Remove-Item -LiteralPath $dst -Recurse -Force
+        if ($safety) { Write-Host "現在の保管庫を退避しました: $safety" }
+        if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force }
+        if (Test-Path -LiteralPath $dst) { Move-Item -LiteralPath $dst -Destination $old }
+        try {
+            # 保管庫の登録情報(secretvaultregistry)はPCごとにモジュールのパスが違うため、データ本体だけ戻す
+            New-Item -ItemType Directory -Path $script:StoreRoot -Force | Out-Null
+            Copy-Item -LiteralPath $src -Destination $script:StoreRoot -Recurse
+            Write-PwKeyFile $vk $NewMasterPassword $rec   # 一時ファイルに書いてから置き換えるので、失敗しても今の鍵ファイルは残る
+        } catch {
+            if (Test-Path -LiteralPath $dst) { Remove-Item -LiteralPath $dst -Recurse -Force -ErrorAction SilentlyContinue }
+            if (Test-Path -LiteralPath $old) { Move-Item -LiteralPath $old -Destination $dst }
+            throw "復元できなかったため、元の保管庫に戻しました。`n$($_.Exception.Message)"
         }
-        # 保管庫の登録情報(secretvaultregistry)はPCごとにモジュールのパスが違うため、データ本体だけ戻す
-        New-Item -ItemType Directory -Path $script:StoreRoot -Force | Out-Null
-        Copy-Item -LiteralPath $src -Destination $script:StoreRoot -Recurse
-        Write-PwKeyFile $vk $NewMasterPassword $rec
+        if (Test-Path -LiteralPath $old) { Remove-Item -LiteralPath $old -Recurse -Force -ErrorAction SilentlyContinue }
         Remove-Item -LiteralPath $script:UnlockFailPath -Force -ErrorAction SilentlyContinue
 
         $cfgFile = Join-Path $tmp 'config.json'

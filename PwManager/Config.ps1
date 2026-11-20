@@ -7,6 +7,11 @@ function Initialize-PwDataDir {
     }
 }
 
+function Get-PwNow([string]$Format) {
+    # 今の日時を文字列にする。Windows の地域設定（和暦など）に左右されないよう、固定の書式で作る
+    [datetime]::Now.ToString($Format, [Globalization.CultureInfo]::InvariantCulture)
+}
+
 function Read-PwJson([string]$Path) {
     Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
 }
@@ -25,6 +30,9 @@ function Get-PwConfig {
         catch { throw "設定ファイルの書式が正しくありません。`n$($script:ConfigPath)`n$($_.Exception.Message)" }
         if ($user) { foreach ($p in $user.PSObject.Properties) { $cfg[$p.Name] = $p.Value } }
     }
+
+    # 画面は有効期限の 60 秒前に再入力を求めるので、それより短いと開くたびに求め続けてしまう
+    if ([int]$cfg.UnlockTimeoutSeconds -lt 120) { throw '設定 UnlockTimeoutSeconds は 120 以上にしてください。' }
 
     $seen = @{}
     foreach ($f in @($cfg.Fields)) {
@@ -69,7 +77,7 @@ function Write-PwAudit([string]$Action, [string]$Detail) {
         if ((Test-Path -LiteralPath $script:AuditPath) -and (Get-Item -LiteralPath $script:AuditPath).Length -gt $script:AuditMaxBytes) {
             Move-Item -LiteralPath $script:AuditPath -Destination ($script:AuditPath -replace '\.log$', '.old.log') -Force
         }
-        $line = "{0}`t{1}`t{2}`t{3}" -f (Get-Date -Format $script:DateFormat), $env:USERNAME, $Action, $Detail
+        $line = "{0}`t{1}`t{2}`t{3}" -f (Get-PwNow $script:DateFormat), $env:USERNAME, $Action, $Detail
         Add-Content -LiteralPath $script:AuditPath -Value $line -Encoding UTF8
     } catch { }
 }

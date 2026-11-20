@@ -23,7 +23,8 @@ function Show-PwMessage([string]$Text, [string]$Kind = 'Info') {
 
 function Invoke-PwUi($ui, [scriptblock]$Action) {
     # 画面操作でのエラーを握りつぶさず、メッセージで表示する
-    try { & $Action } catch { Show-PwMessage $_.Exception.Message 'Error' }
+    # ロックで閉じている途中は表示しない（子画面を閉じたことによる「キャンセル」などで、閉じるのを止めないように）
+    try { & $Action } catch { if (-not $ui.Locking) { Show-PwMessage $_.Exception.Message 'Error' } }
 }
 
 function Invoke-PwVault($ui, [scriptblock]$Action) {

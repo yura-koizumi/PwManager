@@ -198,22 +198,28 @@ function New-PwVaultKeySet([securestring]$MasterPassword) {
 }
 
 function Show-PwRecoveryKey([string]$Text) {
-    # 回復キーをデスクトップのテキストファイルに出し、画面にも表示する。ファイルの場所を返す
+    # 回復キーを画面に表示し、デスクトップのテキストファイルにも出す。ファイルの場所を返す（書けなかったら $null）。
+    # 保管庫はもう回復キーで作られているので、ファイルに書けなくても止めずに、画面の表示を必ず残す
+    Write-Host ''
+    Write-Host "  回復キー: $Text" -ForegroundColor Yellow
     $dir = if ($script:RecoveryKeyDir) { $script:RecoveryKeyDir } else { [Environment]::GetFolderPath('Desktop') }
-    $path = Join-Path $dir ('PwManager-回復キー-{0}-{1}.txt' -f $env:COMPUTERNAME, (Get-Date -Format 'yyyyMMdd-HHmmss'))
-    @(
+    $path = Join-Path $dir ('PwManager-回復キー-{0}-{1}.txt' -f $env:COMPUTERNAME, (Get-PwNow 'yyyyMMdd-HHmmss'))
+    $lines = @(
         'PwManager 回復キー'
         ''
         "    $Text"
         ''
-        "作成: $(Get-Date -Format 'yyyy/MM/dd HH:mm')  PC: $env:COMPUTERNAME  ユーザー: $env:USERNAME"
+        "作成: $(Get-PwNow 'yyyy/MM/dd HH:mm')  PC: $env:COMPUTERNAME  ユーザー: $env:USERNAME"
         ''
         '・バックアップから戻すとき（Restore-PwVault）と、マスターパスワードを忘れたとき（Set-PwMasterPassword -UseRecoveryKey）に使います。'
         '・印刷するか USB メモリーなどに移して、このファイルは PC から削除してください。'
         '  PC に残すと、保管庫と一緒に持ち出されたときに開かれてしまいます。バックアップの ZIP とも別の場所に保管してください。'
-    ) | Set-Content -LiteralPath $path -Encoding UTF8
-    Write-Host ''
-    Write-Host "  回復キー: $Text" -ForegroundColor Yellow
+    )
+    try { $lines | Set-Content -LiteralPath $path -Encoding UTF8 -ErrorAction Stop }
+    catch {
+        Write-Warning "回復キーをファイルに保存できませんでした（$($_.Exception.Message)）。上の回復キーを書き留めてください。"
+        return $null
+    }
     Write-Host "  保存先  : $path"
     Write-Host '  印刷するか USB メモリーなどに移して、このファイルは PC から削除してください。'
     $path

@@ -45,6 +45,26 @@ Check '2 段階認証の鍵など、入れる先の無い列があれば止め�
 Import-PwCsv -Path $totp -IgnoreUnknownColumns 6>$null 3>$null
 Check '-IgnoreUnknownColumns なら、その列を無視して取り込む' ((Get-One 'GitHub').Id -eq 'taro')
 
+Reset-Store
+$bwFull = Write-Csv 'bw-full.csv' @('folder,favorite,type,name,notes,fields,reprompt,login_uri,login_username,login_password,login_totp', ',,login,Amazon,,,0,https://www.amazon.co.jp/,taro,pw-1,')
+Import-PwCsv -Path $bwFull 6>$null 3>$null
+Check '入れる先の無い列（fields・login_totp）でも、値が空なら止めない（Bitwarden の実際の書き出し）' ((Get-One 'Amazon').Id -eq 'taro')
+
+Write-Host '既定の形の書き出し'
+Reset-Store
+[void](& $Pwm { Save-PwEntry -Title "'=odd" -Fields @{ Id = "'-x"; Note = '=SUM(A1)' } -Password (S 'pw') })
+$out0 = Join-Path $dir 'pwm-out.csv'
+Export-PwCsv -Path $out0 -IncludePassword -Confirm:$false 3>$null
+Reset-Store
+Import-PwCsv -Path $out0 6>$null 3>$null
+$e = Get-One "'=odd"
+Check "もともと ' で始まる値も、書き出して取り込み直すと元どおり" ($e -and $e.Id -eq "'-x" -and $e.Note -eq '=SUM(A1)')
+Reset-Store
+Export-PwCsv -Path $out0 3>$null
+Check '0 件でも列名の行を書く' ((Get-Content -LiteralPath $out0 -Encoding UTF8 | Select-Object -First 1) -match '^"Title"')
+Export-PwCsv -Path $out0 -Format Chrome -Confirm:$false 3>$null
+Check '0 件でも列名の行を書く（Chrome 形式）' ([IO.File]::ReadAllText($out0).Trim() -eq '"name","url","username","password","note"')
+
 Write-Host 'Chrome 形式で書き出す'
 Reset-Store
 [void](& $Pwm { Save-PwEntry -Title 'Amazon' -Fields @{ Id = 'taro'; Url = 'https://www.amazon.co.jp/'; Note = "- 箇条書きのメモ`n2 行目" } -Password (S 'pw,"1"') })

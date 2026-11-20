@@ -37,6 +37,7 @@ $main.Add_Shown({
     $later.Add_Tick({ $later.Stop(); $ui.Log.Add("unlock-open=$($unlock.Visible)"); $unlock.Close() })
     $later.Start()
     [void]$unlock.ShowDialog($main); $unlock.Dispose()
+    $ui.Log.Add('unlock-closed')
     # 編集画面
     $edit = New-Object System.Windows.Forms.Form
     $ui.ChildOpen = $true
@@ -47,7 +48,7 @@ $main.Add_Shown({
 [void]$main.ShowDialog()
 $timer.Dispose(); $safety.Dispose(); $main.Dispose()
 $log = $ui.Log
-Check 'マスターパスワード再入力の画面は閉じない' ($log -contains 'unlock-open=True')
+Check 'マスターパスワード再入力の画面も閉じる（出したまま離席しても、後ろの一覧を出し続けない）' ($log -contains 'unlock-closed' -and $log -notcontains 'unlock-open=True')
 Check '編集画面を閉じてからロックする' ($log.IndexOf('edit-closed') -ge 0 -and $log.IndexOf('edit-closed') -lt $log.IndexOf('lock(childOpen=False)'))
 Check '時間切れにならない' ($log -notcontains 'timeout')
 

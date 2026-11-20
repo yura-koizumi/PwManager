@@ -2,8 +2,9 @@
 # （PwManager.psm1 から読み込まれる）
 
 # Excel で開いたとき数式として実行されないよう、= + - @ タブ CR で始まる値の先頭に ' を付ける。
-# パスワードは値を変えないため対象外。Import-PwCsv は付けた ' を取り除く。
-$script:CsvFormulaPattern = "^[=+\-@`t`r]"
+# パスワードは値を変えないため対象外。Import-PwCsv は付けた ' を 1 つ取り除く。
+# もともと ' で始まる値（'=x など）も元どおりに戻るよう、先頭の ' を飛ばして判定し、同じく ' を付ける
+$script:CsvFormulaPattern = "^'*[=+\-@`t`r]"
 
 function Protect-PwCsvValue([string]$Value) {
     if ($Value -match $script:CsvFormulaPattern) { "'" + $Value } else { $Value }
@@ -43,8 +44,8 @@ function Import-PwCsv {
       列名から自動で判別する。Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV は、そのまま取り込める。
       自分で作るときの列: Title（タイトル）・Password（パスワード）と、設定 Fields の Name または Label（例: Id・Url・Note）。
       タイトルの列が無い CSV（Firefox）は、URL のドメイン名をタイトルにする。タイトルかパスワードが空の行は取り込まない。
-      どれにも当てはまらない列（2 段階認証の鍵 login_totp・OTPAuth など）があると、データを取りこぼさないよう止まる
-      （-IgnoreUnknownColumns でその列を無視して続ける）。
+      どれにも当てはまらない列（2 段階認証の鍵 login_totp・OTPAuth など）に値が入っていると、データを取りこぼさないよう止まる
+      （-IgnoreUnknownColumns でその列を無視して続ける）。列があっても、値が空なら止まらない。
       Excel の「CSV (コンマ区切り)」は -Encoding Default、それ以外（ブラウザーや「CSV UTF-8」）は既定の UTF8。
       PwManager の画面を閉じてから実行する。取り込んだら、CSV と元のファイルは削除し、ごみ箱も空にすること。
     .PARAMETER Path
@@ -69,7 +70,12 @@ function Import-PwCsv {
     $rows = @(Import-Csv -LiteralPath $Path -Encoding $Encoding)
     $known = @($script:CsvTitleColumns) + @($script:CsvPasswordColumns) + @($script:CsvIgnoredColumns) +
              @(foreach ($f in @($cfg.Fields)) { Get-PwCsvFieldColumns $f })
-    $unknown = @(if ($rows.Count -gt 0) { $rows[0].PSObject.Properties.Name | Where-Object { $known -notcontains $_ } })
+    # 入れる先の無い列でも、値が 1 つも入っていなければ失うものは無いので止めない
+    # （Bitwarden・1Password は、使っていなくても login_totp・fields・OTPAuth・Tags の列を必ず書き出す）
+    $unknown = @(if ($rows.Count -gt 0) {
+        $rows[0].PSObject.Properties.Name | Where-Object { $known -notcontains $_ } |
+            Where-Object { $col = $_; @($rows | Where-Object { $_.$col }).Count -gt 0 }
+    })
     if ($unknown.Count -gt 0 -and -not $IgnoreUnknownColumns) {
         throw ("取り込み先の項目が無い列があります: {0}`n" +
                "設定の Fields に項目を追加してから取り込むか（README「項目（Fields）を追加・変更する」）、" +
@@ -153,9 +159,14 @@ function Export-PwCsv {
             [pscustomobject]$h
         }
     }
-    if ($chrome) {
+    $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
+    if (-not $rows) {
+        # 0 件でも、列名の行だけは書く（空のファイルは、取り込む側で形式の誤りとして断られるため）
+        $header = if ($chrome) { 'name', 'url', 'username', 'password', 'note' }
+                  else { @('Title') + @(if ($IncludePassword) { 'Password' }) + @($cfg.Fields | ForEach-Object Name) + @('Updated') }
+        [IO.File]::WriteAllLines($full, [string[]]@(($header | ForEach-Object { '"' + $_ + '"' }) -join ','), (New-Object Text.UTF8Encoding (-not $chrome)))
+    } elseif ($chrome) {
         # ブラウザーは先頭の BOM を列名の一部として読むことがあるので、BOM なしの UTF-8 で書く
-        $full = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($Path)
         $lines = [string[]]@(@($rows) | ConvertTo-Csv -NoTypeInformation)
         [IO.File]::WriteAllLines($full, $lines, (New-Object Text.UTF8Encoding $false))
     } else {

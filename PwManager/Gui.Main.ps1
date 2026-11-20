@@ -237,7 +237,7 @@ function Show-PwManager {
         $form.Add_Shown({
             Invoke-PwUi $ui {
                 Update-PwUiData $ui
-                Set-PwUiStatus $ui 'Enter: パスワードをコピー / ダブルクリック: その列をコピー / 右クリック: メニュー'
+                Set-PwUiStatus $ui 'Enter: パスワードをコピー / ダブルクリック: その列をコピー（タイトルは編集） / 右クリック: メニュー'
             }
             [void]$search.Focus()
             $timer.Start()
@@ -253,9 +253,13 @@ function Show-PwManager {
         $mutex.Dispose()
     }
     if ($ui -and $ui.Locking) {
-        # ロックで閉じた。このプロセスはここで終わる（呼び出し元が PowerShell を終了する）
+        # ロックで閉じた。ショートカットからなら、このプロセスはここで終わる（Launch.ps1 が終了する）
         if ($RelaunchOnLock) { Start-PwLauncher -Locked }
-        else { Write-Host 'ロックしました。開き直すには pwm を実行してください。' }
+        else {
+            # コンソールから開いたときは、この PowerShell が保管庫を開いたまま（UnlockTimeoutSeconds まで）なので、閉じるよう案内する
+            Write-Host 'ロックしました。開き直すには pwm を実行してください。' -ForegroundColor Yellow
+            Write-Host "この PowerShell では、保管庫が最大 $([int]([int]$ui.Cfg.UnlockTimeoutSeconds / 60)) 分開いたままです。離席するときは、このウィンドウを閉じてください。" -ForegroundColor Yellow
+        }
     }
 }
 

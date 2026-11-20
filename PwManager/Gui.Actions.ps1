@@ -10,6 +10,8 @@ function Set-PwUiClipboard($ui, [string]$Text, [bool]$Sensitive, [string]$What) 
         $ui.ClipExpire = (Get-Date).AddSeconds($sec)
         Set-PwUiStatus $ui "$What をコピーしました（$sec 秒後に消去）"
     } else {
+        # 前にコピーしたパスワードは、もうクリップボードに無い。消去までの表示もやめる
+        $ui.ClipSeq = $null; $ui.ClipHash = $null; $ui.ClipExpire = $null; $ui.ClipLabel.Text = ''
         Set-PwUiStatus $ui "$What をコピーしました"
     }
 }
@@ -69,7 +71,7 @@ function Remove-PwUiEntry($ui) {
         "「$($e.Title)」を削除しますか？`n`n削除するとバックアップから復元する以外に戻せません。",
         '削除の確認', [System.Windows.Forms.MessageBoxButtons]::YesNo,
         [System.Windows.Forms.MessageBoxIcon]::Warning, [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
-    if ($r -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+    if ($r -ne [System.Windows.Forms.DialogResult]::Yes -or $ui.Locking) { return }   # 確認中にロックしたら消さない
     Invoke-PwVault $ui { Remove-PwEntry -Name $e.Name -Confirm:$false }
     Update-PwUiAfterChange $ui $e.Name -Removed
     Set-PwUiStatus $ui "「$($e.Title)」を削除しました。"
@@ -103,19 +105,21 @@ function Invoke-PwUiChangePassword($ui) {
 function Lock-PwUi($ui) {
     # 画面を閉じて、このプロセスを終える（保管庫の鍵やコピーしたパスワードをメモリーに残さないため）。
     # 起動し直しとクリップボードの消去は Show-PwManager の最後で行う
-    if ($ui.Locking) { return }
     $ui.Locking = $true
     $ui.Form.Close()
 }
 
 function Invoke-PwUiAutoLock($ui) {
-    # 無操作が続いたらロックする。編集などの子画面が開いていれば、内容が画面に残らないよう先に閉じる
-    $lockMin = [double]$ui.Cfg.AutoLockMinutes
-    if ($lockMin -le 0 -or $ui.Locking -or ((Get-Date) - $ui.LastActivity).TotalMinutes -lt $lockMin) { return }
+    # 無操作が続いたらロックする。編集やマスターパスワードの再入力などの子画面が開いていれば、先に閉じる
+    # （再入力の画面を出したまま離席しても、後ろの一覧を出し続けないように）
+    if (-not $ui.Locking) {
+        $lockMin = [double]$ui.Cfg.AutoLockMinutes
+        if ($lockMin -le 0 -or ((Get-Date) - $ui.LastActivity).TotalMinutes -lt $lockMin) { return }
+        $ui.Locking = $true   # これ以降、子画面を閉じたことによるエラー（キャンセルなど）は表示しない
+    }
     $others = @([System.Windows.Forms.Application]::OpenForms | Where-Object { $_ -ne $ui.Form })
-    if (@($others | Where-Object { $_.Tag -eq 'PwUnlock' }).Count -gt 0) { return }  # すでにマスターパスワードを求めている
     if ($others.Count -gt 0) {
-        # 子画面のモーダル処理が終わってからロックする（次のタイマーで再判定）
+        # 子画面のモーダル処理が終わってから閉じる（次のタイマーで再判定）
         foreach ($f in $others) { $f.Close() }
         return
     }

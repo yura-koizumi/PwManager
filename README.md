@@ -165,7 +165,7 @@ Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV �
 
 - Firefox の CSV にはタイトルが無いので、URL のドメイン名（`example.com` など）をタイトルにします。
 - パスワードが空の行（Bitwarden のメモなど）は取り込みません。
-- 2 段階認証の鍵（`login_totp`・`OTPAuth`）やタグなど、入れる先の無い列があると、取りこぼさないよう止まります。要らなければ `-IgnoreUnknownColumns` を付けて実行します。
+- 2 段階認証の鍵（`login_totp`・`OTPAuth`）やタグなど、入れる先の無い列に値が入っていると、取りこぼさないよう止まります（列があっても空なら止まりません）。要らなければ `-IgnoreUnknownColumns` を付けて実行します。
 
 ### Excel から取り込む
 

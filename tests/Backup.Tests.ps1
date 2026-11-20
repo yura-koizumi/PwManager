@@ -49,6 +49,14 @@ Check '復元前の保管庫を退避する' (@(Get-ChildItem -LiteralPath $data
 & $restore $key.RecoveryKey 'master-password-3'   # 続けてもう一度（退避ファイル名が重ならないこと）
 Check '続けて復元しても、退避したファイルを上書きしない' (@(Get-ChildItem -LiteralPath $dataDir -Filter 'pre-restore-*.zip').Count -eq 2)
 
+Set-Content -LiteralPath $storeFile -Value 'v3'
+$origWrite = & $Pwm { ${function:Write-PwKeyFile} }
+& $Pwm { function script:Write-PwKeyFile { throw '書き込みに失敗（テスト）' } }
+$err = $null
+try { & $restore $key.RecoveryKey 'master-password-9' } catch { $err = $_ }
+& $Pwm { param($f) Set-Item function:script:Write-PwKeyFile $f } $origWrite
+Check '途中で失敗したら、元の保管庫に戻す' ($err.Exception.Message -match '元の保管庫に戻しました' -and (Get-Content -LiteralPath $storeFile) -eq 'v3' -and (& $opens 'master-password-3') -and -not (Test-Path -LiteralPath "$store.old"))
+
 $legacy = Join-Path $TestRoot 'legacy.zip'
 Compress-Archive -LiteralPath (Join-Path $env:LOCALAPPDATA 'Microsoft\PowerShell\secretmanagement') -DestinationPath $legacy
 $err = $null
