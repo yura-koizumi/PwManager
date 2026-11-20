@@ -27,6 +27,7 @@ function New-PwUiState($Cfg) {
         LastActivity  = Get-Date                 # 最後に操作した時刻（自動ロックの判定用）
         UnlockedAt    = $null                    # 最後にロックを解除した時刻（再入力の判定用）
         Locking       = $false                   # ロック処理中（画面を閉じている途中）
+        GenOptions    = $null                    # 「生成」の条件 @{ Length; Kind }（前回の選択を覚えておく）
     }
 }
 
@@ -131,6 +132,7 @@ function Show-PwManager {
         }
         [void]$menu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
         & $addItem $menu '変更前のパスワードをコピー' '' { Copy-PwUiPreviousPassword $ui }
+        $prevItem = $menu.Items[$menu.Items.Count - 1]   # 変更前のパスワードがあるエントリでだけ出す（Opening で切り替え）
         & $addItem $menu '編集...' 'F2' { Edit-PwUiEntry $ui }
         & $addItem $menu '削除...' 'Del' { Remove-PwUiEntry $ui }
 
@@ -197,7 +199,13 @@ function Show-PwManager {
                 $grid.CurrentCell = $grid.Rows[$e.RowIndex].Cells[[Math]::Max(0, $e.ColumnIndex)]
             }
         })
-        $menu.Add_Opening({ param($s, $e) if (-not $grid.CurrentRow) { $e.Cancel = $true } })
+        $menu.Add_Opening({
+            param($s, $e)
+            $name = Get-PwUiSelectedName $ui
+            if (-not $name) { $e.Cancel = $true; return }
+            # 調べられなかったときは出しておく（押せば「ありません」と知らせる）
+            $prevItem.Visible = try { Test-PwPreviousPassword $name } catch { $true }
+        })
 
         $btnNew.Add_Click({ Invoke-PwUi $ui { New-PwUiEntry $ui } })
         $btnMenu.Add_Click({ $appMenu.Show($btnMenu, 0, $btnMenu.Height) })

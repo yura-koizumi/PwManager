@@ -47,12 +47,7 @@ function Read-PwEntryPassword {
 function Get-PwNewSecret([securestring]$Password, [switch]$Generate, [switch]$Prompt) {
     # -Password / -Generate / 入力 のどれかでパスワードを決める（どれも無ければ $null）
     if ($Generate -and $Password) { throw '-Password と -Generate は同時に指定できません。' }
-    if ($Generate) {
-        $s = New-Object System.Security.SecureString
-        foreach ($c in (New-PwPassword).ToCharArray()) { $s.AppendChar($c) }
-        $s.MakeReadOnly()
-        return $s
-    }
+    if ($Generate) { return New-PwPassword -AsSecureString }
     if ($Password) { return $Password }
     if ($Prompt) { return Read-PwEntryPassword }
     $null
@@ -72,10 +67,13 @@ function New-PwEntry {
     .PARAMETER Password
       パスワード（SecureString）。省略すると入力を求める。
     .PARAMETER Generate
-      パスワードを生成する（長さなどは設定の PasswordGenerator）。
+      パスワードを生成する（長さなどは設定の PasswordGenerator。条件を変えるときは、例のように New-PwPassword を -Password に渡す）。
     .EXAMPLE
       New-PwEntry 'Amazon' -Fields @{ ID = 'taro'; URL = 'https://www.amazon.co.jp' } -Generate
-      # パスワードを生成して登録（Copy-PwField Amazon でコピーできる）
+      # パスワードを生成して登録（Copy-PwField 'Amazon' でコピーできる）
+    .EXAMPLE
+      New-PwEntry '銀行' -Password (New-PwPassword -Length 12 -NoSymbols -AsSecureString)
+      # 英数字のみ 12 文字で生成して登録
     .EXAMPLE
       New-PwEntry '社内ポータル' -Fields @{ Id = 'u001' }
       # パスワードは入力を求める

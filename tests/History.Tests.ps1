@@ -6,12 +6,14 @@ $name = & $Pwm { Save-PwEntry -Title 'サービス' -Fields @{ Id = 'taro' } -Pa
 
 Write-Host '変更前のパスワード'
 Check '登録しただけでは、変更前のパスワードは無い'     ($null -eq (& $prev $name))
+Check '右クリックのメニューに出さない（Test-PwPreviousPassword が偽）' (-not (& $Pwm { param($n) Test-PwPreviousPassword $n } $name))
 [void](& $save $name $null)
 Check 'パスワード以外の更新では残さない'               ($null -eq (& $prev $name))
 [void](& $save $name 'second-pw')
 $p = & $prev $name
 Check 'パスワードを変えたら、変更前のものを残す'       ($p.Text -eq 'first-pw' -and $p.Replaced -match '^\d{4}-\d\d-\d\d')
-Check '今のパスワードは新しいもの'                     ((& $Pwm { param($n) Get-PwPassword $n } $name) -eq 'second-pw')
+Check '右クリックのメニューに出す（Test-PwPreviousPassword が真）' (& $Pwm { param($n) Test-PwPreviousPassword $n } $name)
+Check '今のパスワードは新しいもの'                    ((& $Pwm { param($n) Get-PwPassword $n } $name) -eq 'second-pw')
 [void](& $save $name 'second-pw')
 Check '同じパスワードを入れ直しても、変更前のものは消えない' ((& $prev $name).Text -eq 'first-pw')
 [void](& $save $name 'third-pw')

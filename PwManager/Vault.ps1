@@ -247,6 +247,11 @@ function Get-PwPreviousPassword([string]$Name) {
        Replaced = $(if ($m -and $m.ContainsKey('Replaced')) { [string]$m['Replaced'] } else { '' }) }
 }
 
+function Test-PwPreviousPassword([string]$Name) {
+    # 変更前のパスワードがあるか（パスワード自体は読まない。右クリックのメニューに出すかの判定に使う）
+    @(Get-PwSecretInfo (Get-PwPreviousName $Name)).Count -gt 0
+}
+
 function Save-PwPreviousPassword([string]$Name, [securestring]$New, [string]$Now) {
     # パスワードを $New に変える前に、今のものを残す（同じパスワードを入れ直したときは何もしない）
     $cfg = Get-PwConfig

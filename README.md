@@ -41,7 +41,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 | **パスワードをコピー** | 行を選んで **Enter**。検索欄で Enter を押すと、選ばれている行（検索した直後は先頭の行）のパスワードをコピーします |
 | ID / URL をコピー | その列をダブルクリック、**Ctrl+C**（選んでいるセルの列）、または右クリック |
 | URL をブラウザーで開く | 右クリック →「URLを開く」 |
-| 新規登録 | 「＋ 新規」または **Ctrl+N**。「生成」を押すと強いパスワードを自動で作ります |
+| 新規登録 | 「＋ 新規」または **Ctrl+N**。「生成」を押すと強いパスワードを自動で作ります（その下で長さと「英数字と記号・英数字のみ・数字のみ」を選べます。サイトの決まりに合わせるときに） |
 | 変更前のパスワードを使う | 右クリック →「変更前のパスワードをコピー」。パスワードを変えると、1 つ前のものだけを残します（新しいパスワードが相手のサイトで通らなかったときなどに） |
 | 編集 | **F2**、タイトルをダブルクリック、または右クリック。パスワード欄を空欄のままにすると、パスワードは変わりません |
 | 削除 | **Del**、または右クリック（確認画面が出ます） |
@@ -68,7 +68,7 @@ Windows 10/11 の標準機能（Windows PowerShell 5.1 と Windows Forms）と�
 | `UnlockTimeoutSeconds` | 900 | 一度ロックを解除したあと、保管庫を開いたままにする秒数（過ぎると、使っている途中でもマスターパスワードの再入力を求める）。短いほど安全で、再入力は増える |
 | `Fields` | ID, URL, 備考 | 表示・入力する項目（下で詳しく説明） |
 | `Categories` | （なし） | カテゴリの候補（`Type: "Category"` の項目を作ったときだけ使う） |
-| `PasswordGenerator` | 20 文字・記号あり | 「生成」で作るパスワードの長さと、使う記号 |
+| `PasswordGenerator` | 20 文字・記号あり | 「生成」の既定の長さ（4〜128）と、使う記号 |
 
 ### 項目（Fields）を追加・変更する
 
@@ -210,7 +210,7 @@ Chrome・Edge・Firefox・Bitwarden・1Password・KeePass が書き出す CSV �
 | `New-PwEntry 'Amazon' -Fields @{ ID = 'taro'; URL = 'https://…' } -Generate` | 登録する（`-Generate` でパスワードを生成。付けなければ入力を求める） |
 | `Set-PwEntry 'Amazon' -Fields @{ URL = 'https://…' }` | 指定した項目だけ変える（`-Title` でタイトル、`-Generate` / `-PromptPassword` でパスワード） |
 | `Remove-PwEntry 'Amazon'` | 削除する（確認あり） |
-| `New-PwPassword -Length 24` | パスワードを生成する |
+| `New-PwPassword -Length 24` | パスワードを生成する（`-NoSymbols` で英数字のみ、`-DigitsOnly` で数字のみ、`-SymbolChars '!@#'` で使う記号を指定） |
 | `Edit-PwConfig` | 設定ファイルを開く |
 | `Backup-PwVault` / `Restore-PwVault` | バックアップ・復元 |
 | `Import-PwCsv` / `Export-PwCsv` | CSV の取り込み・書き出し（ブラウザーやほかのツールの CSV も。`-Format Chrome` でブラウザー向けに書き出す） |

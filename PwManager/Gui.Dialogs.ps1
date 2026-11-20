@@ -230,6 +230,22 @@ function Show-PwEditDialog($ui, $Entry) {
     $gen  = New-PwButton '生成'
     $pwPanel.Controls.AddRange([System.Windows.Forms.Control[]]@($pw, $show, $gen))
     & $addRow $(if ($isNew) { 'パスワード *' } else { 'パスワード' }) $pwPanel
+
+    # 「生成」の条件（サイトの決まりに合わせる）。前回の選択を、画面を閉じるまで覚えておく
+    if (-not $ui.GenOptions) {
+        $g = $cfg.PasswordGenerator
+        $ui.GenOptions = @{ Length = [int]$g.Length; Kind = $(if ($g.Symbols) { 0 } else { 1 }) }
+    }
+    $genPanel = New-PwControl FlowLayoutPanel @{ AutoSize = $true; WrapContents = $false; Margin = (New-PwPadding 0) }
+    $genLabel = New-PwControl Label @{ Text = '生成:'; AutoSize = $true; Margin = (New-PwPadding 3 7 3 3); ForeColor = [System.Drawing.SystemColors]::GrayText }
+    $genLen = New-PwControl NumericUpDown @{ Width = 60; Minimum = $script:PasswordMinLength; Maximum = $script:PasswordMaxLength }
+    $genLen.Value = [Math]::Min($script:PasswordMaxLength, [Math]::Max($script:PasswordMinLength, $ui.GenOptions.Length))
+    $genLenLabel = New-PwControl Label @{ Text = '文字'; AutoSize = $true; Margin = (New-PwPadding 3 7 10 3) }
+    $genKind = New-PwControl ComboBox @{ Width = 130; DropDownStyle = 'DropDownList' }
+    $genKind.Items.AddRange([object[]]@('英数字と記号', '英数字のみ', '数字のみ'))
+    $genKind.SelectedIndex = $ui.GenOptions.Kind
+    $genPanel.Controls.AddRange([System.Windows.Forms.Control[]]@($genLabel, $genLen, $genLenLabel, $genKind))
+    & $addRow '' $genPanel
     if (-not $isNew) {
         $hint = New-PwControl Label @{ Text = '空欄のままなら、パスワードは変更しません。'; AutoSize = $true; ForeColor = [System.Drawing.SystemColors]::GrayText }
         & $addRow '' $hint
@@ -246,7 +262,13 @@ function Show-PwEditDialog($ui, $Entry) {
     $state = @{ Saved = $null }
 
     $show.Add_CheckedChanged({ $pw.UseSystemPasswordChar = -not $show.Checked })
-    $gen.Add_Click({ Invoke-PwUi $ui { $pw.Text = New-PwPassword; $show.Checked = $true } })
+    $gen.Add_Click({
+        Invoke-PwUi $ui {
+            $ui.GenOptions = @{ Length = [int]$genLen.Value; Kind = $genKind.SelectedIndex }
+            $pw.Text = New-PwPassword -Length $ui.GenOptions.Length -NoSymbols:($genKind.SelectedIndex -eq 1) -DigitsOnly:($genKind.SelectedIndex -eq 2)
+            $show.Checked = $true
+        }
+    })
     $save.Add_Click({
         Invoke-PwUi $ui {
             $tt = $title.Text.Trim()
